@@ -32,10 +32,6 @@ RUN apt-get update && \
 # Install Claude Code in the final image directly and skip onboarding
 RUN bun install -g @anthropic-ai/claude-code
 
-# Copy Claude config file and update it with environment variable
-COPY .claude.json /root/.claude.json
-RUN sed -i 's/<API_KEY>/$ANTHROPIC_API_KEY/g' /root/.claude.json
-
 # Copy all application files
 COPY . .
 
@@ -48,14 +44,8 @@ ENV NODE_ENV=production
 # Ensure entrypoint script is executable
 RUN chmod +x /app/entrypoint.sh
 
-# Create directory for persistent storage
-RUN mkdir -p /app/docs && \
-    mkdir -p /app/data && \
-    chmod 777 /app/docs && \
-    chmod 777 /app/data
-
 # Volume for persistent storage
-VOLUME ["/app/docs", "/app/data", ".claude.json"]
+VOLUME [".claude.json"]
 
 # Required environment variables:
 # - DISCORD_TOKEN: Discord bot token
