@@ -1,0 +1,20 @@
+{
+  "name": "bobby",
+  "version": "1.0.0",
+  "description": "Discord ChatBot for answering questions with Claude Code",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.js",
+    "dev": "bun --watch run index.js",
+    "config": "bun run config-wizard.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}
