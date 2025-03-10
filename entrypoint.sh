@@ -27,6 +27,30 @@ echo "Authenticating with GitHub..."
 echo "$GH_TOKEN" | gh auth login --with-token || true
 echo "GitHub authentication completed, continuing startup..."
 
+# Clone the target repository
+if [ ! -d "/app/repo" ]; then
+  echo "Cloning target repository: $GITHUB_REPO..."
+  mkdir -p /app/repo
+  gh repo clone "$GITHUB_REPO" /app/repo
+else
+  echo "Repository directory exists, pulling latest changes..."
+  cd /app/repo
+  git pull
+  cd /app
+fi
+
+# Create a symlink to the repo in home directory for Claude to access
+ln -sf /app/repo ~/repo
+
+# Ensure Claude CLI doesn't require onboarding
+if [ -f ~/.claude.json ]; then
+  echo "Setting hasCompletedOnboarding to true in ~/.claude.json"
+  sed -i 's/"hasCompletedOnboarding": false/"hasCompletedOnboarding": true/g' ~/.claude.json
+else
+  echo "Creating ~/.claude.json with hasCompletedOnboarding set to true"
+  echo '{"hasCompletedOnboarding": true}' > ~/.claude.json
+fi
+
 # Ensure needed directories exist
 mkdir -p /app/docs
 mkdir -p /app/data

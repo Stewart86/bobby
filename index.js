@@ -169,7 +169,11 @@ async function processWithClaude(query) {
     const prompt = `
 Question from user: "${query}"
 
-Please answer this question based on the codebase. 
+Please answer this question based on the codebase that's in your current working directory.
+You're now in the repository: ${GITHUB_REPO}
+
+Explore the code first to understand the structure and implementation details.
+Then provide a comprehensive and accurate answer to the user's question.
 
 If you identify that there might be a bug or issue in the code related to this question, 
 please do the following after answering the user's question:
@@ -193,7 +197,7 @@ you're confident there's a genuine bug that needs attention.
 `;
 
     console.log("Spawning Claude process with prompt...");
-    console.log(`Running command: claude --allowedTools "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS" -p "${prompt.substring(0, 50)}..."`);
+    console.log(`Running command in repo directory: cd /app/repo && claude --allowedTools "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS" -p "${prompt.substring(0, 50)}..."`);
 
     // Execute claude code CLI using Bun.spawn
     // Claude CLI expects proper argument ordering
@@ -206,6 +210,7 @@ you're confident there's a genuine bug that needs attention.
       {
         stdout: "pipe",
         stderr: "pipe",
+        cwd: "/app/repo" // Run in the cloned repository directory
       },
     );
 
