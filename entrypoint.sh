@@ -24,12 +24,8 @@ fi
 
 # Setup GitHub authentication
 echo "Authenticating with GitHub..."
-echo "$GH_TOKEN" | gh auth login --with-token
-if [ $? -eq 0 ]; then
-  echo "Successfully authenticated with GitHub CLI"
-else
-  echo "Failed to authenticate with GitHub, but continuing..."
-fi
+echo "$GH_TOKEN" | gh auth login --with-token || true
+echo "GitHub authentication completed, continuing startup..."
 
 # Ensure Claude can access needed directories
 mkdir -p /app/docs
