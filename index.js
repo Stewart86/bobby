@@ -160,6 +160,8 @@ async function saveToMemory(query, response, topic) {
 
 // Process query with Claude Code
 async function processWithClaude(query) {
+  console.log(`Beginning Claude processing for query: "${query}"`);
+  
   try {
     // Prompt for Claude to both answer the query and analyze for bugs
     const prompt = `
@@ -188,24 +190,38 @@ Your response to the user should focus on answering their question clearly. Only
 you're confident there's a genuine bug that needs attention.
 `;
     
+    console.log("Spawning Claude process with prompt...");
+    console.log(`Running command: claude -p "${prompt.substring(0, 50)}..."`);
+    
     // Execute claude code CLI using Bun.spawn
     const proc = spawn(['claude', '-p', prompt], {
       stdout: 'pipe',
       stderr: 'pipe',
     });
     
+    console.log("Claude process spawned, waiting for response...");
+    
     const stdout = await new Response(proc.stdout).text();
     const stderr = await new Response(proc.stderr).text();
     const exitCode = await proc.exited;
     
+    console.log(`Claude process finished with exit code: ${exitCode}`);
+    
     if (exitCode !== 0 || stderr) {
       console.error('Claude Code error:', stderr);
+      console.log("Claude stderr output length:", stderr.length);
+      console.log("Claude stderr sample:", stderr.substring(0, 200) + (stderr.length > 200 ? "..." : ""));
       return { success: false, response: 'Error processing with Claude Code.' };
     }
+    
+    console.log("Claude response received successfully");
+    console.log("Claude stdout output length:", stdout.length);
+    console.log("Claude stdout sample:", stdout.substring(0, 200) + (stdout.length > 200 ? "..." : ""));
     
     // Check if the response mentions creating a GitHub issue
     const createdIssueMatch = stdout.match(/created (an? )?issue|issue created|created github issue/i);
     const isBugDetected = createdIssueMatch !== null;
+    console.log(`Bug detected in Claude response: ${isBugDetected}`);
     
     // Format response to exclude GitHub issue creation details if present
     let userResponse = stdout;
@@ -221,17 +237,21 @@ you're confident there's a genuine bug that needs attention.
         "Based on my analysis, there's a bug"
       ];
       
+      console.log("Processing bug detection markers...");
       for (const marker of issueCreationMarkers) {
         const markerIndex = userResponse.indexOf(marker);
         if (markerIndex > 0) {
+          console.log(`Found issue marker: "${marker}" at position ${markerIndex}`);
           // Add a note about issue creation but remove the details
           userResponse = userResponse.substring(0, markerIndex) + 
             "\n\n---\n\nI've identified a bug related to this and created a GitHub issue to track it.";
+          console.log("Trimmed response to remove issue creation details");
           break;
         }
       }
     }
     
+    console.log("Claude processing complete, returning response");
     return { 
       success: true, 
       response: userResponse, 
@@ -239,25 +259,58 @@ you're confident there's a genuine bug that needs attention.
     };
   } catch (error) {
     console.error('Error processing with Claude:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
     return { success: false, response: 'Error processing your request.' };
   }
 }
 
 // Determine if a message is calling for Bobby
 function isCallingBobby(content) {
+  if (!content) {
+    console.log('Message content is empty or undefined');
+    return false;
+  }
+  
   const lowerContent = content.toLowerCase();
-  return lowerContent.includes('bobby') || lowerContent.includes('@bobby');
+  const containsBobby = lowerContent.includes('bobby');
+  const containsAtBobby = lowerContent.includes('@bobby');
+  
+  console.log(`Message content: "${content}"`);
+  console.log(`Contains "bobby": ${containsBobby}`);
+  console.log(`Contains "@bobby": ${containsAtBobby}`);
+  
+  return containsBobby || containsAtBobby;
 }
 
 // Extract query from message
 function extractQuery(content) {
+  if (!content) {
+    console.log('Cannot extract query from empty content');
+    return '';
+  }
+  
   // Remove "bobby" or "@bobby" from the message
-  return content.replace(/bobby|@bobby/gi, '').trim();
+  const result = content.replace(/bobby|@bobby/gi, '').trim();
+  console.log(`Original content: "${content}"`);
+  console.log(`Extracted query: "${result}"`);
+  
+  return result;
 }
 
 // Discord client ready event
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
+  console.log(`Client ID: ${client.user.id}`);
+  console.log('Client permissions:', client.user.permissions ? client.user.permissions.toArray() : 'No permissions data');
+  console.log(`Connected to ${client.guilds.cache.size} servers`);
+  
+  // Log server info
+  client.guilds.cache.forEach(guild => {
+    console.log(`Connected to server: ${guild.name} (${guild.id})`);
+    console.log(`Server owner: ${guild.ownerId}`);
+    console.log(`Member count: ${guild.memberCount}`);
+  });
   
   // Initialize CLAUDE.md
   await initClaudeMd();
@@ -290,40 +343,72 @@ client.on('guildCreate', async (guild) => {
 
 // Discord message event
 client.on(Events.MessageCreate, async message => {
+  console.log(`Message received: "${message.content}" from ${message.author.username}`);
+  
   // Ignore messages from bots
-  if (message.author.bot) return;
+  if (message.author.bot) {
+    console.log('Ignoring message from bot');
+    return;
+  }
   
   // Check if the message is calling for Bobby
-  if (isCallingBobby(message.content)) {
+  const isCalling = isCallingBobby(message.content);
+  console.log(`Is message calling Bobby? ${isCalling}`);
+  
+  if (isCalling) {
     // Extract query
     const query = extractQuery(message.content);
+    console.log(`Extracted query: "${query}"`);
     
     // Skip if query is empty
-    if (!query) return;
-    
-    // Check rate limit
-    if (!checkRateLimit(message.author.id)) {
-      await message.reply('You have exceeded the rate limit. Please try again later.');
+    if (!query) {
+      console.log('Query is empty, skipping');
       return;
     }
     
-    // Send typing indicator
-    await message.channel.sendTyping();
-    
-    // Process query with Claude
-    const { success, response, isBug } = await processWithClaude(query);
-    
-    if (success) {
-      // Determine appropriate topic based on query
-      const topic = isBug ? 'Bugs' : 'General Queries';
+    try {
+      // Send acknowledgment immediately
+      await message.reply("I'm looking into that for you. Give me a moment to search the codebase...");
+      console.log('Sent acknowledgment message');
       
-      // Save to memory
-      await saveToMemory(query, response, topic);
+      // Check rate limit
+      if (!checkRateLimit(message.author.id)) {
+        console.log(`Rate limit exceeded for user ${message.author.username}`);
+        await message.reply('You have exceeded the rate limit. Please try again later.');
+        return;
+      }
       
-      // Send response
-      await message.reply(response);
-    } else {
-      await message.reply('Sorry, I encountered an error while processing your request.');
+      // Send typing indicator
+      await message.channel.sendTyping();
+      console.log('Sent typing indicator');
+      
+      console.log(`Processing query with Claude: "${query}"`);
+      // Process query with Claude
+      const { success, response, isBug } = await processWithClaude(query);
+      console.log(`Claude processing complete. Success: ${success}, Is bug: ${isBug}`);
+      
+      if (success) {
+        // Determine appropriate topic based on query
+        const topic = isBug ? 'Bugs' : 'General Queries';
+        console.log(`Saving response to memory under topic: ${topic}`);
+        
+        // Save to memory
+        await saveToMemory(query, response, topic);
+        
+        // Send response
+        console.log('Sending response to user');
+        await message.reply(response);
+      } else {
+        console.log('Claude processing failed, sending error message');
+        await message.reply('Sorry, I encountered an error while processing your request.');
+      }
+    } catch (err) {
+      console.error('Error in message handler:', err);
+      try {
+        await message.reply('I encountered an unexpected error. Please try again later.');
+      } catch (replyErr) {
+        console.error('Failed to send error message:', replyErr);
+      }
     }
   }
 });
@@ -331,10 +416,32 @@ client.on(Events.MessageCreate, async message => {
 // Main function
 async function main() {
   try {
+    console.log('Bobby starting up...');
+    console.log('Environment check:');
+    console.log(`- DISCORD_TOKEN: ${DISCORD_TOKEN ? 'Set (length: ' + DISCORD_TOKEN.length + ')' : 'Not set'}`);
+    console.log(`- ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? 'Set (length: ' + process.env.ANTHROPIC_API_KEY.length + ')' : 'Not set'}`);
+    console.log(`- GH_TOKEN: ${process.env.GH_TOKEN ? 'Set (length: ' + process.env.GH_TOKEN.length + ')' : 'Not set'}`);
+    console.log(`- GITHUB_REPO: ${GITHUB_REPO ? GITHUB_REPO : 'Not set'}`);
+    console.log(`- ALLOWED_DISCORD_SERVERS: ${process.env.ALLOWED_DISCORD_SERVERS || 'Not set'}`);
+    
+    // Check Claude installation
+    try {
+      const claudeVersion = await new Response((await spawn(['claude', '--version'], { stdout: 'pipe' })).stdout).text();
+      console.log(`Claude CLI found: ${claudeVersion.trim()}`);
+    } catch (error) {
+      console.error('Error checking Claude CLI installation:', error.message);
+    }
+    
+    console.log('Logging into Discord...');
+    
     // Log in to Discord
     await client.login(DISCORD_TOKEN);
+    console.log('Discord login successful');
+    
   } catch (error) {
     console.error('Error starting Bobby:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
     process.exit(1);
   }
 }
