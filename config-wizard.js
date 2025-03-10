@@ -36,12 +36,24 @@ async function configWizard() {
   const ghToken = await prompt('Enter your GitHub Personal Access Token:');
   const githubRepo = await prompt('Enter your GitHub Repository (owner/repo-name):');
   
+  console.log('\n=== Security Configuration ===');
+  console.log('For production use, you should restrict which Discord servers can use your bot');
+  const allowServers = await prompt('Do you want to restrict which servers can use your bot? (y/n):');
+  
+  let allowedServers = '';
+  if (allowServers.toLowerCase() === 'y') {
+    console.log('Enter the Discord server IDs that are allowed to use your bot (comma-separated):');
+    console.log('You can find server IDs by enabling Developer Mode in Discord, then right-clicking a server and selecting "Copy ID"');
+    allowedServers = await prompt('Allowed Discord Server IDs:');
+  }
+  
   // Create configuration object
   const config = {
     DISCORD_TOKEN: discordToken,
     ANTHROPIC_API_KEY: anthropicKey,
     GH_TOKEN: ghToken,
-    GITHUB_REPO: githubRepo
+    GITHUB_REPO: githubRepo,
+    ALLOWED_DISCORD_SERVERS: allowedServers
   };
   
   // Create .env file (unencrypted) for development

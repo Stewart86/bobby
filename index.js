@@ -246,6 +246,29 @@ client.once(Events.ClientReady, async () => {
   console.log('Bobby is now ready to answer queries!');
 });
 
+// Security: Handle joining a new server (guild)
+client.on('guildCreate', async (guild) => {
+  // List of allowed server IDs - read from environment variable if available
+  // Format: comma-separated list of server IDs (e.g. "123456789,987654321")
+  const allowedServersEnv = process.env.ALLOWED_DISCORD_SERVERS || '';
+  const allowedServers = allowedServersEnv.split(',').filter(id => id.trim() !== '');
+  
+  // If no allowed servers are specified, accept all servers (for development)
+  if (allowedServers.length === 0) {
+    console.log(`Joined server: ${guild.name} (${guild.id})`);
+    console.log('Warning: No allowed servers configured. Set ALLOWED_DISCORD_SERVERS env variable for production.');
+    return;
+  }
+  
+  // Check if the server is authorized
+  if (!allowedServers.includes(guild.id)) {
+    console.log(`Leaving unauthorized server: ${guild.name} (${guild.id})`);
+    await guild.leave();
+  } else {
+    console.log(`Joined authorized server: ${guild.name} (${guild.id})`);
+  }
+});
+
 // Discord message event
 client.on(Events.MessageCreate, async message => {
   // Ignore messages from bots

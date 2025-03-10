@@ -31,6 +31,7 @@ Bobby is a Discord chatbot that helps answer questions about your codebase, file
      - **Message Content Intent** (required to read message content)
      - **Server Members Intent**
      - **Presence Intent**
+   - **IMPORTANT**: Under "Authorization Flow", disable the "Public Bot" toggle to make your bot private
    - Save your changes
 
 ### Getting Your Bot Token
@@ -54,6 +55,40 @@ Bobby is a Discord chatbot that helps answer questions about your codebase, file
 4. Copy the generated URL and open it in your browser
 5. Select the server you want to add the bot to and follow the prompts
 6. Authorize the bot with the selected permissions
+
+### Securing Your Bot (Important)
+
+To keep your bot private and prevent unauthorized access:
+
+1. **Disable Public Bot Setting**: In the Discord Developer Portal under the "Bot" tab, make sure "Public Bot" is disabled. This prevents anyone with your client ID from adding the bot to their server.
+
+2. **Implement Server Whitelist**: Add code to check server IDs and leave any unauthorized servers.
+
+```javascript
+// Add to index.js
+client.on('guildCreate', async (guild) => {
+  // List of allowed server IDs
+  const allowedServers = [
+    // Add your authorized server IDs here
+    '123456789012345678', 
+    '987654321098765432'
+  ];
+  
+  // Check if the server is authorized
+  if (!allowedServers.includes(guild.id)) {
+    console.log(`Leaving unauthorized server: ${guild.name} (${guild.id})`);
+    await guild.leave();
+  } else {
+    console.log(`Joined authorized server: ${guild.name} (${guild.id})`);
+  }
+});
+```
+
+3. **Control Invite Links**: Only share bot invite links with trusted users and regularly rotate your bot token if you suspect unauthorized access.
+
+4. **Use Minimal Permissions**: Only request the permissions your bot actually needs to function.
+
+5. **Regularly Audit Servers**: Periodically check which servers your bot has joined and remove it from any unauthorized ones.
 
 ## Anthropic API Key Setup
 
@@ -149,12 +184,15 @@ GITHUB_REPO=owner/repo-name
      -e ANTHROPIC_API_KEY=your_anthropic_api_key \
      -e GH_TOKEN=your_github_personal_access_token \
      -e GITHUB_REPO=owner/repo-name \
+     -e ALLOWED_DISCORD_SERVERS=123456789012345678,987654321098765432 \
      -v bobby-docs:/app/docs \
      -v bobby-db:/app/bobby.sqlite \
      bobby-bot
    ```
 
    The container will automatically authenticate with GitHub using your GH_TOKEN before starting the bot.
+   
+   **Security Note**: The `ALLOWED_DISCORD_SERVERS` environment variable controls which Discord servers can use your bot. If not specified, all servers will be allowed (not recommended for production).
 
 ## Usage
 
