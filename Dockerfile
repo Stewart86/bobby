@@ -44,6 +44,12 @@ ENV NODE_ENV=production
 # Ensure entrypoint script is executable
 RUN chmod +x /app/entrypoint.sh
 
+# Create directory for persistent storage
+RUN mkdir -p /app/docs && \
+    touch /app/bobby.sqlite && \
+    chmod 777 /app/docs && \
+    chmod 666 /app/bobby.sqlite
+
 # Volume for persistent storage
 VOLUME ["/app/docs", "/app/bobby.sqlite"]
 

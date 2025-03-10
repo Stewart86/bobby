@@ -46,7 +46,25 @@ const client = new Client({
 
 // Initialize SQLite database for rate limiting
 const DB_PATH = path.join(process.cwd(), 'bobby.sqlite');
-const db = new Database(DB_PATH);
+console.log(`Opening SQLite database at: ${DB_PATH}`);
+
+// Set up database connection
+let db;
+try {
+  db = new Database(DB_PATH);
+  console.log("Successfully opened SQLite database file");
+} catch (err) {
+  console.error(`Failed to open SQLite database: ${err.message}`);
+  console.error(`Database path: ${DB_PATH}`);
+  console.error(`Error code: ${err.code}, errno: ${err.errno}`);
+  
+  // Create an in-memory database as fallback
+  console.log("Falling back to in-memory SQLite database");
+  db = new Database(":memory:");
+  console.log("In-memory database created successfully");
+}
+
+// Create table if it doesn't exist
 db.run(`
   CREATE TABLE IF NOT EXISTS rate_limits (
     user_id TEXT PRIMARY KEY,

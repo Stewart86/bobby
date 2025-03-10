@@ -30,9 +30,15 @@ echo "GitHub authentication completed, continuing startup..."
 # Ensure Claude can access needed directories
 mkdir -p /app/docs
 
-# Create empty SQLite database if it doesn't exist
-touch /app/bobby.sqlite
-chmod 666 /app/bobby.sqlite
+# Make sure SQLite database is accessible
+if [ -f "/app/bobby.sqlite" ]; then
+  echo "Ensuring SQLite database is writable..."
+  chmod 666 /app/bobby.sqlite
+else
+  echo "Creating new SQLite database file..."
+  touch /app/bobby.sqlite
+  chmod 666 /app/bobby.sqlite
+fi
 
 # Setup CLAUDE.md if it doesn't exist
 if [ ! -f "/app/CLAUDE.md" ]; then
