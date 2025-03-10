@@ -201,8 +201,8 @@ you're confident there's a genuine bug that needs attention.
         "claude",
         "-p",
         "--allowedTools",
-        '"Bash(git pull),Read,Write,Edit,Search,Viewm,GrepTool,GlobTool,LS"',
-        `"${prompt}"`,
+        "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
+        prompt,
       ],
       {
         stdout: "pipe",
