@@ -30,8 +30,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code in the final image directly and skip onboarding
-RUN bun install -g @anthropic-ai/claude-code && \
-    (test -f ~/.claude.json && sed -i 's/"hasCompletedOnboarding": false/"hasCompletedOnboarding": true/g' ~/.claude.json || echo '{"hasCompletedOnboarding": true}' > ~/.claude.json)
+RUN bun install -g @anthropic-ai/claude-code
+RUN cp /app/.claude.json /root/.claude.json && \
+    sed -i 's/<API_KEY>/$ANTHROPIC_API_KEY' /root/.claude.json
 
 # Copy all application files
 COPY . .
@@ -52,7 +53,7 @@ RUN mkdir -p /app/docs && \
     chmod 777 /app/data
 
 # Volume for persistent storage
-VOLUME ["/app/docs", "/app/data"]
+VOLUME ["/app/docs", "/app/data", ".claude.json"]
 
 # Required environment variables:
 # - DISCORD_TOKEN: Discord bot token

@@ -1,0 +1,46 @@
+{
+  "numStartups": 4,
+  "customApiKeyResponses": {
+    "approved": [
+      "pXZE02mBz8A-R0V5RAAA"
+    ],
+    "rejected": []
+  },
+  "hasCompletedOnboarding": true,
+  "projects": {
+    "/app/repo": {
+      "allowedTools": [
+        "Bash(gh*)",
+        "Bash(rg:*)",
+        "Bash(git pull)",
+        "Write",
+        "Edit",
+        "Search",
+        "GrepTool",
+        "GlobTool",
+        "Search",
+        "LS"
+      ],
+      "history": [],
+      "dontCrawlDirectory": false,
+      "enableArchitectTool": false,
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "approvedMcprcServers": [],
+      "rejectedMcprcServers": [],
+      "hasTrustDialogAccepted": true,
+      "ignorePatterns": [],
+      "hasCompletedProjectOnboarding": true,
+      "exampleFiles": [
+        "middleware.ts",
+        "services/cartService.ts",
+        "EditOrder.tsx",
+        "SingleOrder.tsx",
+        "StoreSetup.tsx"
+      ],
+      "exampleFilesGeneratedAt": 1741626380264
+    }
+  },
+  "doctorShownAtSession": 0,
+  "primaryApiKey": "<API_KEY>"
+}

@@ -209,7 +209,7 @@ you're confident there's a genuine bug that needs attention.
       [
         "claude",
         "--allowedTools",
-        "Bash(git pull),View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
+        "Bash(git pull),Bash(gh*),View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
         "-p",
         prompt,
       ],
