@@ -56,6 +56,21 @@ Bobby is a Discord chatbot that helps answer questions about your codebase, file
 5. Select the server you want to add the bot to and follow the prompts
 6. Authorize the bot with the selected permissions
 
+### Getting Your Server ID
+
+To get your Discord server ID (needed for the server whitelist):
+
+1.  Enable Developer Mode:
+
+    - Open Discord and go to User Settings (gear icon)
+    - Navigate to App Settings > Advanced
+    - Toggle on Developer Mode
+
+2.  Get the Server ID:
+    - Right-click on your server icon in the left sidebar
+    - Select "Copy ID" from the menu
+    - The server ID is now in your clipboard
+
 ### Securing Your Bot (Important)
 
 To keep your bot private and prevent unauthorized access:
@@ -66,14 +81,14 @@ To keep your bot private and prevent unauthorized access:
 
 ```javascript
 // Add to index.js
-client.on('guildCreate', async (guild) => {
+client.on("guildCreate", async (guild) => {
   // List of allowed server IDs
   const allowedServers = [
     // Add your authorized server IDs here
-    '123456789012345678', 
-    '987654321098765432'
+    "123456789012345678",
+    "987654321098765432",
   ];
-  
+
   // Check if the server is authorized
   if (!allowedServers.includes(guild.id)) {
     console.log(`Leaving unauthorized server: ${guild.name} (${guild.id})`);
@@ -93,14 +108,17 @@ client.on('guildCreate', async (guild) => {
 ## Anthropic API Key Setup
 
 1. Create an Anthropic account:
+
    - Go to [Anthropic's website](https://www.anthropic.com)
    - Click "Sign Up" and follow the prompts to create an account
 
 2. Access the API Console:
+
    - Log in to your Anthropic account
    - Navigate to the API Console section
 
 3. Generate an API Key:
+
    - In the API Console, locate the "API Keys" section
    - Click "Create New API Key"
    - Give your key a descriptive name (e.g., "Bobby Bot")
@@ -146,20 +164,23 @@ GITHUB_REPO=owner/repo-name
 ### Local Development
 
 1. Install dependencies:
+
    ```bash
    bun install
    ```
 
 2. Install Claude Code CLI:
+
    ```bash
    bun install -g @anthropic-ai/claude-code
    ```
 
 3. Install GitHub CLI and authenticate:
+
    ```bash
    # Install GitHub CLI (follow instructions for your OS)
    # https://github.com/cli/cli#installation
-   
+
    # Authenticate with your token
    echo $GH_TOKEN | gh auth login --with-token
    ```
@@ -172,11 +193,13 @@ GITHUB_REPO=owner/repo-name
 ### Docker Deployment
 
 1. Build the Docker image:
+
    ```bash
    docker build -t bobby-bot .
    ```
 
 2. Run the container:
+
    ```bash
    docker run -d \
      --name bobby \
@@ -191,7 +214,7 @@ GITHUB_REPO=owner/repo-name
    ```
 
    The container will automatically authenticate with GitHub using your GH_TOKEN before starting the bot.
-   
+
    **Security Note**: The `ALLOWED_DISCORD_SERVERS` environment variable controls which Discord servers can use your bot. If not specified, all servers will be allowed (not recommended for production).
 
 ## Usage
@@ -211,11 +234,13 @@ If you're offering Bobby as a service to multiple users or organizations, consid
 ### 1. Self-Hosted Web Portal
 
 Create a simple secure web interface where users can:
+
 - Enter their own API keys and tokens
 - Select GitHub repositories they want to monitor
 - Configure Discord servers to connect to
 
 Store configurations securely:
+
 - Use encrypted database storage with proper authentication
 - Implement a multi-tenant architecture with separate instances
 - Never expose API keys in logs or client-side code
@@ -226,37 +251,51 @@ Create a secure configuration wizard script:
 
 ```javascript
 // config-wizard.js
-import { prompt } from 'bun:prompt';
-import { write, file } from 'bun';
-import { randomBytes, createCipheriv } from 'crypto';
+import { prompt } from "bun:prompt";
+import { write, file } from "bun";
+import { randomBytes, createCipheriv } from "crypto";
 
 async function configWizard() {
-  console.log('Bobby Bot Configuration Wizard');
-  
+  console.log("Bobby Bot Configuration Wizard");
+
   // Get encryption password
-  const password = await prompt('Enter a secure password to encrypt your configuration:', { password: true });
-  
+  const password = await prompt(
+    "Enter a secure password to encrypt your configuration:",
+    { password: true },
+  );
+
   // Collect credentials
   const config = {
-    DISCORD_TOKEN: await prompt('Enter your Discord Bot Token:'),
-    ANTHROPIC_API_KEY: await prompt('Enter your Anthropic API Key:'),
-    GH_TOKEN: await prompt('Enter your GitHub Personal Access Token:'),
-    GITHUB_REPO: await prompt('Enter your GitHub Repository (owner/repo-name):')
+    DISCORD_TOKEN: await prompt("Enter your Discord Bot Token:"),
+    ANTHROPIC_API_KEY: await prompt("Enter your Anthropic API Key:"),
+    GH_TOKEN: await prompt("Enter your GitHub Personal Access Token:"),
+    GITHUB_REPO: await prompt(
+      "Enter your GitHub Repository (owner/repo-name):",
+    ),
   };
-  
+
   // Encrypt and save configuration
   const iv = randomBytes(16);
-  const cipher = createCipheriv('aes-256-cbc', password.substr(0, 32).padEnd(32, '0'), iv);
-  let encrypted = cipher.update(JSON.stringify(config), 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  
-  await write('bobby-config.enc', JSON.stringify({
-    iv: iv.toString('hex'),
-    data: encrypted
-  }));
-  
-  console.log('Configuration saved to bobby-config.enc');
-  console.log('To start Bobby, run: bun run --env-file-path bobby-config.enc index.js');
+  const cipher = createCipheriv(
+    "aes-256-cbc",
+    password.substr(0, 32).padEnd(32, "0"),
+    iv,
+  );
+  let encrypted = cipher.update(JSON.stringify(config), "utf8", "hex");
+  encrypted += cipher.final("hex");
+
+  await write(
+    "bobby-config.enc",
+    JSON.stringify({
+      iv: iv.toString("hex"),
+      data: encrypted,
+    }),
+  );
+
+  console.log("Configuration saved to bobby-config.enc");
+  console.log(
+    "To start Bobby, run: bun run --env-file-path bobby-config.enc index.js",
+  );
 }
 
 configWizard();
@@ -288,6 +327,7 @@ docker run -d \
 ```
 
 This allows each organization to use their own:
+
 - API keys and tokens
 - Memory storage (docs/)
 - Rate limiting database
@@ -315,6 +355,7 @@ Bobby stores information in Markdown files in the `docs/` directory, organized b
 ## Rate Limiting
 
 Bobby implements rate limiting to prevent abuse:
+
 - 20 requests per user per hour
 - Limits are stored in SQLite database
 
