@@ -27,8 +27,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy Claude Code installation from builder
-COPY --from=builder /root/.bun/bin/claude /usr/local/bin/claude
+# Install Claude Code in the final image directly
+RUN bun install -g @anthropic-ai/claude-code
 
 # Copy all application files
 COPY . .
