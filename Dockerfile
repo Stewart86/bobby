@@ -29,8 +29,9 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code in the final image directly
-RUN bun install -g @anthropic-ai/claude-code
+# Install Claude Code in the final image directly and skip onboarding
+RUN bun install -g @anthropic-ai/claude-code && \
+    (test -f ~/.claude.json && sed -i 's/"hasCompletedOnboarding": false/"hasCompletedOnboarding": true/g' ~/.claude.json || echo '{"hasCompletedOnboarding": true}' > ~/.claude.json)
 
 # Copy all application files
 COPY . .
