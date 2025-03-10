@@ -196,13 +196,15 @@ you're confident there's a genuine bug that needs attention.
     console.log(`Running command: claude -p "${prompt.substring(0, 50)}..."`);
 
     // Execute claude code CLI using Bun.spawn
+    // Each argument needs to be a separate array element
+    // The prompt shouldn't have extra quotes as spawn handles that
     const proc = spawn(
       [
         "claude",
         "-p",
         "--allowedTools",
-        "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
-        prompt,
+        "'Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS'",
+        `'${prompt}'`,
       ],
       {
         stdout: "pipe",
