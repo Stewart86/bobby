@@ -30,6 +30,10 @@ echo "GitHub authentication completed, continuing startup..."
 # Ensure Claude can access needed directories
 mkdir -p /app/docs
 
+# Create empty SQLite database if it doesn't exist
+touch /app/bobby.sqlite
+chmod 666 /app/bobby.sqlite
+
 # Setup CLAUDE.md if it doesn't exist
 if [ ! -f "/app/CLAUDE.md" ]; then
   echo "# Bobby Memory Index

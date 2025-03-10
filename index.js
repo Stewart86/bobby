@@ -45,7 +45,8 @@ const client = new Client({
 });
 
 // Initialize SQLite database for rate limiting
-const db = new Database('bobby.sqlite');
+const DB_PATH = path.join(process.cwd(), 'bobby.sqlite');
+const db = new Database(DB_PATH);
 db.run(`
   CREATE TABLE IF NOT EXISTS rate_limits (
     user_id TEXT PRIMARY KEY,
