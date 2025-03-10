@@ -167,13 +167,14 @@ async function processWithClaude(query) {
   try {
     // Prompt for Claude to both answer the query and analyze for bugs
     const prompt = `
-Question from user: "${query}"
+${query}
 
-Please answer this question based on the codebase that's in your current working directory.
-You're now in the repository: ${GITHUB_REPO}
-
-Explore the code first to understand the structure and implementation details.
-Then provide a comprehensive and accurate answer to the user's question.
+Please follow these steps to answer the user's question:
+1. always fetch the latest git changes before running any commands.
+2. be sure to read from CLAUDE.md to access the memory / knowledge base. or under the docs/ directory for topic-specific information.
+3. explore the code to understand the structure and implementation details.
+4. update the memory with the response to this query in the appropriate topic into CLAUDE.md and docs/ folder.
+5. Then provide a comprehensive and accurate answer to the question.
 
 If you identify that there might be a bug or issue in the code related to this question, 
 please do the following after answering the user's question:
@@ -192,25 +193,30 @@ When creating an issue, please:
 - Add labels: "bug" and "bobby-detected"
 - Mention that it was detected by Bobby (Claude Code)
 
-Your response to the user should focus on answering their question clearly. Only create an issue if 
+Your response to should focus on answering their question clearly. Only create an issue if 
 you're confident there's a genuine bug that needs attention.
+
 `;
 
     console.log("Spawning Claude process with prompt...");
-    console.log(`Running command in repo directory: cd /app/repo && claude --allowedTools "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS" -p "${prompt.substring(0, 50)}..."`);
+    console.log(
+      `Running command in repo directory: cd /app/repo && claude --allowedTools "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS" -p "${prompt.substring(0, 50)}..."`,
+    );
 
     // Execute claude code CLI using Bun.spawn
     // Claude CLI expects proper argument ordering
     const proc = spawn(
       [
         "claude",
-        "--allowedTools", "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
-        "-p", prompt 
+        "--allowedTools",
+        "Bash(git pull),View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
+        "-p",
+        prompt,
       ],
       {
         stdout: "pipe",
         stderr: "pipe",
-        cwd: "/app/repo" // Run in the cloned repository directory
+        cwd: "/app/repo", // Run in the cloned repository directory
       },
     );
 
