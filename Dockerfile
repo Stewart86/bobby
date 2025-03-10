@@ -31,8 +31,10 @@ RUN apt-get update && \
 
 # Install Claude Code in the final image directly and skip onboarding
 RUN bun install -g @anthropic-ai/claude-code
-RUN cp /app/.claude.json /root/.claude.json && \
-    sed -i 's/<API_KEY>/$ANTHROPIC_API_KEY' /root/.claude.json
+
+# Copy Claude config file and update it with environment variable
+COPY .claude.json /root/.claude.json
+RUN sed -i 's/<API_KEY>/$ANTHROPIC_API_KEY/g' /root/.claude.json
 
 # Copy all application files
 COPY . .
