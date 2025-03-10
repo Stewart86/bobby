@@ -45,7 +45,7 @@ const client = new Client({
 });
 
 // Initialize SQLite database for rate limiting
-const DB_PATH = path.join(process.cwd(), 'bobby.sqlite');
+const DB_PATH = path.join(process.cwd(), 'data', 'bobby.sqlite');
 console.log(`Opening SQLite database at: ${DB_PATH}`);
 
 // Set up database connection

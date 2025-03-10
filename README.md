@@ -209,7 +209,7 @@ GITHUB_REPO=owner/repo-name
      -e GITHUB_REPO=owner/repo-name \
      -e ALLOWED_DISCORD_SERVERS=123456789012345678,987654321098765432 \
      -v bobby-docs:/app/docs \
-     -v bobby-db:/app/bobby.sqlite \
+     -v bobby-data:/app/data \
      bobby-bot
    ```
 
@@ -338,8 +338,9 @@ This allows each organization to use their own:
 bobby/
 ├── index.js           # Main application file
 ├── docs/              # Memory storage directory
+├── data/              # Data storage directory
+│   └── bobby.sqlite   # Rate limiting database
 ├── CLAUDE.md          # Memory index for Claude
-├── bobby.sqlite       # Rate limiting database
 ├── package.json       # Dependency management
 ├── entrypoint.sh      # Docker container initialization script
 ├── deploy-bobby.sh    # Multi-instance deployment script

@@ -46,12 +46,12 @@ RUN chmod +x /app/entrypoint.sh
 
 # Create directory for persistent storage
 RUN mkdir -p /app/docs && \
-    touch /app/bobby.sqlite && \
+    mkdir -p /app/data && \
     chmod 777 /app/docs && \
-    chmod 666 /app/bobby.sqlite
+    chmod 777 /app/data
 
 # Volume for persistent storage
-VOLUME ["/app/docs", "/app/bobby.sqlite"]
+VOLUME ["/app/docs", "/app/data"]
 
 # Required environment variables:
 # - DISCORD_TOKEN: Discord bot token

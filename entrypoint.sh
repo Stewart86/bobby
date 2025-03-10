@@ -27,17 +27,18 @@ echo "Authenticating with GitHub..."
 echo "$GH_TOKEN" | gh auth login --with-token || true
 echo "GitHub authentication completed, continuing startup..."
 
-# Ensure Claude can access needed directories
+# Ensure needed directories exist
 mkdir -p /app/docs
+mkdir -p /app/data
 
 # Make sure SQLite database is accessible
-if [ -f "/app/bobby.sqlite" ]; then
+if [ -f "/app/data/bobby.sqlite" ]; then
   echo "Ensuring SQLite database is writable..."
-  chmod 666 /app/bobby.sqlite
+  chmod 666 /app/data/bobby.sqlite
 else
   echo "Creating new SQLite database file..."
-  touch /app/bobby.sqlite
-  chmod 666 /app/bobby.sqlite
+  touch /app/data/bobby.sqlite
+  chmod 666 /app/data/bobby.sqlite
 fi
 
 # Setup CLAUDE.md if it doesn't exist
