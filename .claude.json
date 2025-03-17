@@ -1,26 +1,22 @@
 {
-  "numStartups": 4,
+  "numStartups": 12,
+  "theme": "light",
   "customApiKeyResponses": {
-    "approved": [
-      "pXZE02mBz8A-R0V5RAAA"
-    ],
+    "approved": ["<REDACTED>"],
     "rejected": []
   },
+  "userID": "1173e8e19444f6dd8b1552eea9867c15c372c1ee1e13243587f9ede5069c7fb9",
+  "oauthAccount": {
+    "accountUuid": "17d0c7fd-48c2-4fdc-8c8d-f0e3e1deebc8",
+    "emailAddress": "stewart@blockchef.com",
+    "organizationUuid": "f328c2af-69ee-40b1-83c1-7c817679c184"
+  },
+  "primaryApiKey": "<API_KEY>",
   "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "0.2.35",
   "projects": {
     "/app/repo": {
-      "allowedTools": [
-        "Bash(gh*)",
-        "Bash(rg:*)",
-        "Bash(git pull)",
-        "Write",
-        "Edit",
-        "Search",
-        "GrepTool",
-        "GlobTool",
-        "Search",
-        "LS"
-      ],
+      "allowedTools": ["Bash(gh issue list:*)"],
       "history": [],
       "dontCrawlDirectory": false,
       "enableArchitectTool": false,
@@ -30,7 +26,6 @@
       "rejectedMcprcServers": [],
       "hasTrustDialogAccepted": true,
       "ignorePatterns": [],
-      "hasCompletedProjectOnboarding": true,
       "exampleFiles": [
         "middleware.ts",
         "services/cartService.ts",
@@ -38,9 +33,9 @@
         "SingleOrder.tsx",
         "StoreSetup.tsx"
       ],
-      "exampleFilesGeneratedAt": 1741626380264
+      "exampleFilesGeneratedAt": 1741629825847,
+      "hasCompletedProjectOnboarding": true
     }
   },
-  "doctorShownAtSession": 0,
-  "primaryApiKey": "<API_KEY>"
+  "doctorShownAtSession": 0
 }

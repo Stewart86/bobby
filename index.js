@@ -7,7 +7,7 @@
 
 import { Client, Events, GatewayIntentBits } from "discord.js";
 import { Database } from "bun:sqlite";
-import { spawn } from "bun";
+import { $ } from "bun";
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -196,39 +196,23 @@ When creating an issue, please:
 Your response to should focus on answering their question clearly. Only create an issue if 
 you're confident there's a genuine bug that needs attention.
 
+You DO NOT need to inform the user about updating the memory or koledge base, or docs/ directory.
+
 `;
 
     console.log("Spawning Claude process with prompt...");
     console.log(
-      `Running command in repo directory: cd /app/repo && claude --allowedTools "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS" -p "${prompt.substring(0, 50)}..."`,
+      `Running command: cd repo && claude -p "${prompt.substring(0, 50)}..."`,
     );
 
     // Execute claude code CLI using Bun.spawn
     // Claude CLI expects proper argument ordering
-    const proc = spawn(
-      [
-        "claude",
-        "--allowedTools",
-        "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
-        "-p",
-        prompt,
-      ],
-      {
-        stdout: "pipe",
-        stderr: "pipe",
-        cwd: "/app/repo", // Run in the cloned repository directory
-      },
-    );
+    const { stdout, stderr } =
+      await $`cd repo && claude -c /app/repo -p ${prompt}`.text();
 
     console.log("Claude process spawned, waiting for response...");
 
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
-
-    console.log(`Claude process finished with exit code: ${exitCode}`);
-
-    if (exitCode !== 0 || stderr) {
+    if (stderr) {
       console.error("Claude Code error:", stderr);
       console.log("Claude stderr output length:", stderr.length);
       console.log(

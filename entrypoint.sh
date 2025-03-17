@@ -46,7 +46,12 @@ ln -sf /app/repo ~/repo
 mkdir -p /app/docs
 mkdir -p /app/data
 
-# Setup CLAUDE.md if it doesn't exist
+# Move .claude.json to data directory if it exists at root and not in data dir
+if [ -f "/app/.claude.json" ] && [ ! -f "/app/data/.claude.json" ]; then
+  echo "Moving .claude.json to persistent data directory..."
+  mv /app/.claude.json /app/data/.claude.json
+fi
+
 echo "Bobby initialization complete!"
 echo "Starting Bobby Discord Bot..."
 

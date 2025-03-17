@@ -44,8 +44,14 @@ ENV NODE_ENV=production
 # Ensure entrypoint script is executable
 RUN chmod +x /app/entrypoint.sh
 
+# Create persistent data directory
+RUN mkdir -p /app/data
+
 # Volume for persistent storage
-VOLUME [".claude.json"]
+VOLUME ["/app/data"]
+
+# Set Claude config directory
+ENV CLAUDE_CONFIG_DIR=/app/data
 
 # Required environment variables:
 # - DISCORD_TOKEN: Discord bot token
