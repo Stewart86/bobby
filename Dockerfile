@@ -32,6 +32,8 @@ RUN apt-get update && \
 # Install Claude Code in the final image directly and skip onboarding
 RUN bun install -g @anthropic-ai/claude-code
 
+RUN git config --global pull.rebase true
+
 # Copy all application files
 COPY . .
 

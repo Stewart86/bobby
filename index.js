@@ -86,13 +86,13 @@ async function initClaudeMd() {
     await fs.writeFile(
       CLAUDE_MD_PATH,
       "# Bobby Memory Index\n\n" +
-      "This file maintains references to Bobby's memory documents stored in the docs/ directory.\n\n" +
-      "## Memory Access Instructions\n\n" +
-      "- Read documents from the docs/ directory to retrieve stored information\n" +
-      "- Store new information in topic-specific markdown files in the docs/ directory\n" +
-      "- Update this index when creating new documents\n\n" +
-      "## Memory Index\n\n" +
-      "- No memories stored yet\n",
+        "This file maintains references to Bobby's memory documents stored in the docs/ directory.\n\n" +
+        "## Memory Access Instructions\n\n" +
+        "- Read documents from the docs/ directory to retrieve stored information\n" +
+        "- Store new information in topic-specific markdown files in the docs/ directory\n" +
+        "- Update this index when creating new documents\n\n" +
+        "## Memory Index\n\n" +
+        "- No memories stored yet\n",
     );
   }
 }
@@ -490,7 +490,7 @@ async function main() {
     // Check Claude installation
     try {
       const claudeVersion = await new Response(
-        (await spawn(["claude", "--version"], { stdout: "pipe" })).stdout,
+        spawn(["claude", "--version"], { stdout: "pipe" }).stdout,
       ).text();
       console.log(`Claude CLI found: ${claudeVersion.trim()}`);
     } catch (error) {
