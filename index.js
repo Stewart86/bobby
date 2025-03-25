@@ -412,10 +412,26 @@ client.on(Events.MessageCreate, async (message) => {
     }
 
     try {
-      // Send acknowledgment immediately
-      await message.reply(
+      // Array of possible acknowledgment messages
+      const acknowledgmentMessages = [
         "I'm looking into that for you. Give me a moment to search the codebase...",
-      );
+        "Bobby on the case! Searching through the code now...",
+        "Let me check that out for you. Just a moment while I search...",
+        "Bobby's on it! Give me a moment to analyze the repository...",
+        "Scanning the codebase now. I'll have an answer for you shortly...",
+        "Leave it to Bobby! Checking the code for you now...",
+        "Working on your request now. This will just take a moment...",
+        "This looks like a job for Bobby! Searching now...",
+        "Analyzing your question. I'll have a response for you soon...",
+        "On it! Digging into the code for you..."
+      ];
+      
+      // Select a random acknowledgment message
+      const randomIndex = Math.floor(Math.random() * acknowledgmentMessages.length);
+      const acknowledgment = acknowledgmentMessages[randomIndex];
+      
+      // Send acknowledgment immediately
+      await message.reply(acknowledgment);
       console.log("Sent acknowledgment message");
 
       // Check rate limit
@@ -446,9 +462,48 @@ client.on(Events.MessageCreate, async (message) => {
         // Save to memory
         await saveToMemory(query, response, topic);
 
-        // Send response
+        // Send response (handle >2000 characters with multipart messages)
         console.log("Sending response to user");
-        await message.reply(response);
+        if (response.length <= 2000) {
+          await message.reply(response);
+        } else {
+          // Split response into parts of 2000 or fewer characters
+          console.log(`Response exceeds 2000 characters (${response.length}), sending in parts`);
+          const parts = [];
+          let remaining = response;
+          
+          while (remaining.length > 0) {
+            // Find a good break point (end of sentence or paragraph) within first 1900 chars
+            // This gives some buffer for "Part X/Y: " prefix
+            let breakPoint = 1900;
+            if (remaining.length > 1900) {
+              // Try to find paragraph break
+              const paraBreak = remaining.lastIndexOf('\n\n', 1900);
+              if (paraBreak > 1500) {
+                breakPoint = paraBreak + 2; // Include the paragraph break
+              } else {
+                // Try to find sentence break (period followed by space)
+                const sentenceBreak = remaining.lastIndexOf('. ', 1900);
+                if (sentenceBreak > 1500) {
+                  breakPoint = sentenceBreak + 2; // Include the period and space
+                }
+              }
+            } else {
+              breakPoint = remaining.length;
+            }
+            
+            parts.push(remaining.substring(0, breakPoint));
+            remaining = remaining.substring(breakPoint).trim();
+          }
+          
+          console.log(`Split response into ${parts.length} parts`);
+          
+          // Send each part
+          for (let i = 0; i < parts.length; i++) {
+            const partHeader = `Part ${i+1}/${parts.length}: `;
+            await message.reply(partHeader + parts[i]);
+          }
+        }
       } else {
         console.log("Claude processing failed, sending error message");
         await message.reply(
@@ -458,9 +513,8 @@ client.on(Events.MessageCreate, async (message) => {
     } catch (err) {
       console.error("Error in message handler:", err);
       try {
-        await message.reply(
-          "I encountered an unexpected error. Please try again later.",
-        );
+        const errorMsg = "I encountered an unexpected error. Please try again later.";
+        await message.reply(errorMsg);
       } catch (replyErr) {
         console.error("Failed to send error message:", replyErr);
       }
