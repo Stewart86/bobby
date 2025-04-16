@@ -1,24 +1,9 @@
-# Multi-stage build for Bobby Discord Bot
-FROM oven/bun:latest as builder
-
-# Install GitHub CLI
-RUN apt-get update && \
-    apt-get install -y curl gnupg && \
-    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
-    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y gh
-
-# Install Claude Code CLI
-RUN bun install -g @anthropic-ai/claude-code
-
-# Final stage
+# Bobby Discord Bot Dockerfile
 FROM oven/bun:latest
 
 WORKDIR /app
 
-# Install GitHub CLI and dependencies
+# Install dependencies: GitHub CLI, curl, gnupg, git
 RUN apt-get update && \
     apt-get install -y curl gnupg git && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
@@ -29,7 +14,7 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Claude Code in the final image directly and skip onboarding
+# Install Claude Code CLI
 RUN bun install -g @anthropic-ai/claude-code
 
 RUN git config --global pull.rebase true
@@ -40,7 +25,7 @@ COPY . .
 # Install dependencies
 RUN bun install --production
 
-# Set required environment variables
+# Set environment variables
 ENV NODE_ENV=production
 
 # Ensure entrypoint script is executable

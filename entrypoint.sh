@@ -35,7 +35,9 @@ if [ ! -d "/app/repo" ]; then
 else
   echo "Repository directory exists, pulling latest changes..."
   cd /app/repo
-  git pull
+  git reset --hard
+  git clean -fd
+  git pull --rebase
   cd /app
 fi
 
