@@ -24,7 +24,7 @@ fi
 
 # Setup GitHub authentication
 echo "Authenticating with GitHub..."
-echo "$GH_TOKEN" | gh auth login --with-token || true
+echo "$GH_TOKEN" | gh auth login || true
 echo "GitHub authentication completed, continuing startup..."
 
 # Clone the target repository
@@ -35,9 +35,7 @@ if [ ! -d "/app/repo" ]; then
 else
   echo "Repository directory exists, pulling latest changes..."
   cd /app/repo
-  git reset --hard
-  git clean -fd
-  git pull --rebase
+  gh repo sync --force
   cd /app
 fi
 
