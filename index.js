@@ -6,10 +6,7 @@
  */
 
 import { Client, Events, GatewayIntentBits } from "discord.js";
-import { Database } from "bun:sqlite";
 import { spawn } from "bun";
-import { promises as fs } from "fs";
-import path from "path";
 
 // Environment variables
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
@@ -44,176 +41,76 @@ const client = new Client({
   ],
 });
 
-// Initialize SQLite database for rate limiting
-const DB_PATH = path.join(process.cwd(), "data", "bobby.sqlite");
-console.log(`Opening SQLite database at: ${DB_PATH}`);
 
-// Set up database connection
-let db;
-try {
-  db = new Database(DB_PATH);
-  console.log("Successfully opened SQLite database file");
-} catch (err) {
-  console.error(`Failed to open SQLite database: ${err.message}`);
-  console.error(`Database path: ${DB_PATH}`);
-  console.error(`Error code: ${err.code}, errno: ${err.errno}`);
-
-  // Create an in-memory database as fallback
-  console.log("Falling back to in-memory SQLite database");
-  db = new Database(":memory:");
-  console.log("In-memory database created successfully");
-}
-
-// Create table if it doesn't exist
-db.run(`
-  CREATE TABLE IF NOT EXISTS rate_limits (
-    user_id TEXT PRIMARY KEY,
-    last_request INTEGER,
-    request_count INTEGER
-  )
-`);
-
-// Memory management (docs directory)
-const DOCS_DIR = path.join(process.cwd(), "docs");
-const CLAUDE_MD_PATH = path.join(process.cwd(), "CLAUDE.md");
-
-// Initialize claude.md if it doesn't exist
-async function initClaudeMd() {
-  try {
-    await fs.access(CLAUDE_MD_PATH);
-  } catch (err) {
-    // File doesn't exist, create it
-    await fs.writeFile(
-      CLAUDE_MD_PATH,
-      "# Bobby Memory Index\n\n" +
-        "This file maintains references to Bobby's memory documents stored in the docs/ directory.\n\n" +
-        "## Memory Access Instructions\n\n" +
-        "- Read documents from the docs/ directory to retrieve stored information\n" +
-        "- Store new information in topic-specific markdown files in the docs/ directory\n" +
-        "- Update this index when creating new documents\n\n" +
-        "## Memory Index\n\n" +
-        "- No memories stored yet\n",
-    );
-  }
-}
-
-// Check rate limits for a user
-function checkRateLimit(userId) {
-  const now = Date.now();
-  const rateLimit = db
-    .query("SELECT * FROM rate_limits WHERE user_id = ?")
-    .get(userId);
-
-  // If user doesn't exist in rate limits table or it's been more than 1 hour
-  if (!rateLimit || now - rateLimit.last_request > 3600000) {
-    db.run(
-      "INSERT OR REPLACE INTO rate_limits (user_id, last_request, request_count) VALUES (?, ?, ?)",
-      [userId, now, 1],
-    );
-    return true;
-  }
-
-  // If user has made fewer than 20 requests in the last hour
-  if (rateLimit.request_count < 20) {
-    db.run(
-      "UPDATE rate_limits SET last_request = ?, request_count = ? WHERE user_id = ?",
-      [now, rateLimit.request_count + 1, userId],
-    );
-    return true;
-  }
-
-  return false;
-}
-
-// Save response to memory
-async function saveToMemory(query, response, topic) {
-  // Clean the topic to create a valid filename
-  const safeFilename = topic.toLowerCase().replace(/[^a-z0-9]/g, "-");
-  const filePath = path.join(DOCS_DIR, `${safeFilename}.md`);
+// Process query with Claude Code using streaming
+async function processWithClaude(query, originalMessage) {
+  console.log(`Beginning Claude streaming processing for query: "${query}"`);
 
   try {
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-      // File exists, append to it
-      const content = await fs.readFile(filePath, "utf8");
-      const updatedContent = `${content}\n\n## Query: ${query}\n\n${response}\n\n---\n`;
-      await fs.writeFile(filePath, updatedContent);
-    } catch (err) {
-      // File doesn't exist, create it
-      const content = `# ${topic}\n\n## Query: ${query}\n\n${response}\n\n---\n`;
-      await fs.writeFile(filePath, content);
+    // Optimized system prompt using Claude Sonnet 4.0 best practices
+    const systemPrompt = `<role>
+You are Bobby, an expert code analysis assistant operating as a Discord bot. You have deep expertise in software engineering, debugging, and codebase architecture.
+</role>
 
-      // Update CLAUDE.md index
-      const claudeMd = await fs.readFile(CLAUDE_MD_PATH, "utf8");
-      const updatedClaudeMd = claudeMd.replace(
-        "- No memories stored yet",
-        `- [${topic}](docs/${safeFilename}.md)`,
-      );
-      await fs.writeFile(CLAUDE_MD_PATH, updatedClaudeMd);
-    }
+<context>
+You operate within a Discord environment where responses have strict formatting constraints. Users seek quick, actionable insights about their codebase.
+</context>
 
-    return true;
-  } catch (err) {
-    console.error("Error saving to memory:", err);
-    return false;
-  }
-}
+<instructions>
+1. **Always start by fetching latest git changes** using available tools
+2. **Analyze the relevant code sections** thoroughly but efficiently  
+3. **Provide direct, actionable answers** - users need solutions, not explanations of problems
+4. **If you discover genuine bugs:** Check for existing GitHub issues first, then create a detailed issue if none exists
 
-// Process query with Claude Code
-async function processWithClaude(query) {
-  console.log(`Beginning Claude processing for query: "${query}"`);
+<response_format>
+- Lead with the **direct answer** (1-2 sentences max)
+- Use **bullet points** for key findings
+- Include **minimal essential code** only if critical
+- **Limit total response to 1800 characters**
+- End with exactly: "[STATUS: COMPLETED]" or "[STATUS: ISSUE_CREATED]"
+</response_format>
 
-  try {
-    // Prompt for Claude to both answer the query and analyze for bugs
-    const prompt = `
-${query}
+<github_issues>
+When creating issues:
+- Title: Clear, specific problem statement
+- Body: Problem summary + technical details + reproduction steps
+- Labels: "bug" and "bobby-detected"
+- Mention: "Detected by Bobby (Claude Code assistant)"
+</github_issues>
 
-Please follow these steps to answer the user's question:
-1. always fetch the latest git changes before running any commands.
-2. be sure to read from CLAUDE.md to access the memory / knowledge base. or under the docs/ directory for topic-specific information.
-3. explore the code to understand the structure and implementation details.
-4. update the memory with the response to this query in the appropriate topic into CLAUDE.md and docs/ folder.
-5. Then provide a comprehensive and accurate answer to the question.
+<examples>
+Good response:
+"The function is missing null checks on line 42. This will cause crashes when users pass undefined values.
 
-If you identify that there might be a bug or issue in the code related to this question, 
-please do the following after answering the user's question:
+• Problem: No validation for \`user.email\` parameter  
+• Impact: Runtime errors in production
+• Fix: Add \`if (!user?.email) return null;\`
 
-1. Determine if there's a genuine bug or issue that warrants creating a GitHub issue
-2. If a bug exists, use the GitHub CLI (gh) to create a detailed issue in the repository ${GITHUB_REPO}
+[STATUS: COMPLETED]"
 
-When creating an issue, please:
-- Use a clear, descriptive title
-- Include a detailed description with:
-  - Summary of the problem
-  - Technical details about the issue
-  - Steps to reproduce if applicable
-  - Potential solutions if known
-  - Impact on functionality
-- Add labels: "bug" and "bobby-detected"
-- Mention that it was detected by Bobby (Claude Code)
+Bad response:
+"Well, I've analyzed your codebase and there are several interesting patterns here. Let me walk you through what I found step by step..."
+</examples>
+</instructions>
 
-Your response to should focus on answering their question clearly. Only create an issue if 
-you're confident there's a genuine bug that needs attention.
+Be precise, actionable, and concise. Users value speed and accuracy over verbose explanations.`;
 
-You DO NOT need to inform the user about updating the memory or koledge base, or docs/ directory.
+    console.log("Spawning Claude process with streaming...");
 
-`;
-
-    console.log("Spawning Claude process with prompt...");
-    console.log(
-      `Running command in repo directory: cd /app/repo && claude --allowedTools "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS" -p "${prompt.substring(0, 50)}..."`,
-    );
-
-    // Execute claude code CLI using Bun.spawn
-    // Claude CLI expects proper argument ordering
+    // Execute claude code CLI using Bun.spawn with streaming
     const proc = spawn(
       [
         "claude",
+        "--verbose",
         "--allowedTools",
-        "Bash,View,Read,Write,Edit,Search,GrepTool,GlobTool,LS",
-        "-p",
-        prompt,
+        "Bash(gh:*),Bash(git:*),View,Read,Write(.*CLAUDE.md),Edit(.*CLAUDE.md),Search,Grep,Glob,List",
+        "--continue", // Retain context between interactions
+        "--print",
+        query,
+        "--system-prompt",
+        systemPrompt,
+        "--output-format",
+        "stream-json"
       ],
       {
         stdout: "pipe",
@@ -222,74 +119,134 @@ You DO NOT need to inform the user about updating the memory or koledge base, or
       },
     );
 
-    console.log("Claude process spawned, waiting for response...");
+    console.log("Claude process spawned, starting stream processing...");
 
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
+    let responseContent = "";
+    let lastMessageRef = null;
+    let stderrBuffer = "";
+
+    // Process stdout stream in real-time
+    try {
+      for await (const chunk of proc.stdout) {
+        const text = new TextDecoder().decode(chunk);
+        
+        // Parse each line as separate JSON objects
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          try {
+            const jsonData = JSON.parse(line);
+            
+            // Send assistant messages immediately as they arrive
+            if (jsonData.type === 'assistant' && jsonData.message?.content) {
+              const content = Array.isArray(jsonData.message.content) 
+                ? jsonData.message.content.map(block => block.text || block).join('')
+                : jsonData.message.content;
+              
+              if (content) {
+                responseContent += content;
+                
+                try {
+                  if (!lastMessageRef) {
+                    lastMessageRef = await originalMessage.reply(responseContent);
+                  } else {
+                    await lastMessageRef.edit(responseContent);
+                  }
+                } catch (discordError) {
+                  console.error("Discord update error:", discordError);
+                }
+              }
+            }
+            
+            // Handle final result
+            if (jsonData.type === 'result' && jsonData.subtype === 'success' && jsonData.result) {
+              responseContent = jsonData.result;
+              
+              try {
+                if (!lastMessageRef) {
+                  lastMessageRef = await originalMessage.reply(responseContent);
+                } else {
+                  await lastMessageRef.edit(responseContent);
+                }
+              } catch (discordError) {
+                console.error("Discord final update error:", discordError);
+              }
+            }
+            
+          } catch (parseError) {
+            // Skip invalid JSON lines
+            console.log("Skipping non-JSON line:", line.substring(0, 100));
+          }
+        }
+      }
+    } catch (streamError) {
+      console.error("Error processing stdout stream:", streamError);
+    }
+
+    // Collect stderr
+    try {
+      for await (const chunk of proc.stderr) {
+        stderrBuffer += new TextDecoder().decode(chunk);
+      }
+    } catch (stderrError) {
+      console.error("Error processing stderr stream:", stderrError);
+    }
+
     const exitCode = await proc.exited;
-
     console.log(`Claude process finished with exit code: ${exitCode}`);
 
-    if (exitCode !== 0 || stderr) {
-      console.error("Claude Code error:", stderr);
-      console.log("Claude stderr output length:", stderr.length);
+    if (exitCode !== 0 || stderrBuffer) {
+      console.error("Claude Code error:", stderrBuffer);
+      console.log("Claude stderr output length:", stderrBuffer.length);
       console.log(
         "Claude stderr sample:",
-        stderr.substring(0, 200) + (stderr.length > 200 ? "..." : ""),
+        stderrBuffer.substring(0, 200) + (stderrBuffer.length > 200 ? "..." : ""),
       );
+
+      // Update message with error
+      if (lastMessageRef) {
+        await lastMessageRef.edit("❌ Error processing with Claude Code.");
+      }
       return { success: false, response: "Error processing with Claude Code." };
     }
 
-    console.log("Claude response received successfully");
-    console.log("Claude stdout output length:", stdout.length);
-    console.log(
-      "Claude stdout sample:",
-      stdout.substring(0, 200) + (stdout.length > 200 ? "..." : ""),
-    );
+    console.log("Claude streaming response received successfully");
+    console.log("Response content length:", responseContent.length);
 
-    // Check if the response mentions creating a GitHub issue
-    const createdIssueMatch = stdout.match(
-      /created (an? )?issue|issue created|created github issue/i,
-    );
-    const isBugDetected = createdIssueMatch !== null;
-    console.log(`Bug detected in Claude response: ${isBugDetected}`);
+    // Check status indicator from Claude's response
+    const isBugDetected = responseContent.includes("[STATUS: ISSUE_CREATED]");
+    console.log(`Bug detected and issue created: ${isBugDetected}`);
 
-    // Format response to exclude GitHub issue creation details if present
-    let userResponse = stdout;
-    if (isBugDetected) {
-      // Simple heuristic to try to extract just the user-facing answer part
-      // Looking for markers that might indicate the start of issue creation
-      const issueCreationMarkers = [
-        "I've identified a bug",
-        "I've created an issue",
-        "I'll create a GitHub issue",
-        "Creating a GitHub issue",
-        "I'll file an issue",
-        "Based on my analysis, there's a bug",
-      ];
+    // Clean up status indicators from final message
+    let userResponse = responseContent
+      .replace(/\[STATUS: (COMPLETED|ISSUE_CREATED)\]/g, '')
+      .trim();
 
-      console.log("Processing bug detection markers...");
-      for (const marker of issueCreationMarkers) {
-        const markerIndex = userResponse.indexOf(marker);
-        if (markerIndex > 0) {
-          console.log(
-            `Found issue marker: "${marker}" at position ${markerIndex}`,
-          );
-          // Add a note about issue creation but remove the details
-          userResponse =
-            userResponse.substring(0, markerIndex) +
-            "\n\n---\n\nI've identified a bug related to this and created a GitHub issue to track it.";
-          console.log("Trimmed response to remove issue creation details");
-          break;
-        }
+    // Final cleanup if we have a message reference
+    if (lastMessageRef && userResponse !== responseContent) {
+      try {
+        await lastMessageRef.edit(userResponse);
+      } catch (editError) {
+        console.error("Error cleaning up final message:", editError);
       }
     }
 
-    console.log("Claude processing complete, returning response");
+    // If no message was sent during streaming, send fallback
+    if (!lastMessageRef) {
+      try {
+        const fallbackMsg = userResponse || "✅ Analysis complete - no output generated.";
+        lastMessageRef = await originalMessage.reply(fallbackMsg);
+      } catch (replyError) {
+        console.error("Error sending fallback response:", replyError);
+      }
+    }
+
+    console.log("Claude streaming processing complete");
     return {
       success: true,
       response: userResponse,
       isBug: isBugDetected,
+      streamedMessage: lastMessageRef
     };
   } catch (error) {
     console.error("Error processing with Claude:", error);
@@ -299,37 +256,14 @@ You DO NOT need to inform the user about updating the memory or koledge base, or
   }
 }
 
-// Determine if a message is calling for Bobby
+// Check if message is calling Bobby
 function isCallingBobby(content) {
-  if (!content) {
-    console.log("Message content is empty or undefined");
-    return false;
-  }
-
-  const lowerContent = content.toLowerCase();
-  const containsBobby = lowerContent.includes("bobby");
-  const containsAtBobby = lowerContent.includes("@bobby");
-
-  console.log(`Message content: "${content}"`);
-  console.log(`Contains "bobby": ${containsBobby}`);
-  console.log(`Contains "@bobby": ${containsAtBobby}`);
-
-  return containsBobby || containsAtBobby;
+  return content?.toLowerCase().includes("bobby");
 }
 
-// Extract query from message
+// Extract query from message (remove Bobby mentions)
 function extractQuery(content) {
-  if (!content) {
-    console.log("Cannot extract query from empty content");
-    return "";
-  }
-
-  // Remove "bobby" or "@bobby" from the message
-  const result = content.replace(/bobby|@bobby/gi, "").trim();
-  console.log(`Original content: "${content}"`);
-  console.log(`Extracted query: "${result}"`);
-
-  return result;
+  return content?.replace(/bobby|@bobby/gi, "").trim() || "";
 }
 
 // Discord client ready event
@@ -347,12 +281,7 @@ client.once(Events.ClientReady, async () => {
   // Log server info
   client.guilds.cache.forEach((guild) => {
     console.log(`Connected to server: ${guild.name} (${guild.id})`);
-    console.log(`Server owner: ${guild.ownerId}`);
-    console.log(`Member count: ${guild.memberCount}`);
   });
-
-  // Initialize CLAUDE.md
-  await initClaudeMd();
 
   console.log("Bobby is now ready to answer queries!");
 });
@@ -386,141 +315,42 @@ client.on("guildCreate", async (guild) => {
 
 // Discord message event
 client.on(Events.MessageCreate, async (message) => {
-  console.log(
-    `Message received: "${message.content}" from ${message.author.username}`,
-  );
-
-  // Ignore messages from bots
-  if (message.author.bot) {
-    console.log("Ignoring message from bot");
+  // Ignore bots and non-Bobby messages
+  if (message.author.bot || !isCallingBobby(message.content)) {
     return;
   }
 
-  // Check if the message is calling for Bobby
-  const isCalling = isCallingBobby(message.content);
-  console.log(`Is message calling Bobby? ${isCalling}`);
+  const query = extractQuery(message.content);
+  if (!query) {
+    return;
+  }
 
-  if (isCalling) {
-    // Extract query
-    const query = extractQuery(message.content);
-    console.log(`Extracted query: "${query}"`);
+  console.log(`Processing query: "${query}" from ${message.author.username}`);
 
-    // Skip if query is empty
-    if (!query) {
-      console.log("Query is empty, skipping");
-      return;
+  try {
+    await message.channel.sendTyping();
+    const { success, response, isBug, streamedMessage } = await processWithClaude(query, message);
+
+    if (success) {
+      console.log(`Query processed. Issue created: ${isBug}`);
+
+      // Fallback: send response if streaming failed
+      if (!streamedMessage && response) {
+        await message.reply(response);
+      }
+    } else {
+      await message.reply("Sorry, I encountered an error while processing your request.");
     }
-
+  } catch (err) {
+    console.error("Error in message handler:", err);
     try {
-      // Array of possible acknowledgment messages
-      const acknowledgmentMessages = [
-        "I'm looking into that for you. Give me a moment to search the codebase...",
-        "Bobby on the case! Searching through the code now...",
-        "Let me check that out for you. Just a moment while I search...",
-        "Bobby's on it! Give me a moment to analyze the repository...",
-        "Scanning the codebase now. I'll have an answer for you shortly...",
-        "Leave it to Bobby! Checking the code for you now...",
-        "Working on your request now. This will just take a moment...",
-        "This looks like a job for Bobby! Searching now...",
-        "Analyzing your question. I'll have a response for you soon...",
-        "On it! Digging into the code for you..."
-      ];
-      
-      // Select a random acknowledgment message
-      const randomIndex = Math.floor(Math.random() * acknowledgmentMessages.length);
-      const acknowledgment = acknowledgmentMessages[randomIndex];
-      
-      // Send acknowledgment immediately
-      await message.reply(acknowledgment);
-      console.log("Sent acknowledgment message");
-
-      // Check rate limit
-      if (!checkRateLimit(message.author.id)) {
-        console.log(`Rate limit exceeded for user ${message.author.username}`);
-        await message.reply(
-          "You have exceeded the rate limit. Please try again later.",
-        );
-        return;
-      }
-
-      // Send typing indicator
-      await message.channel.sendTyping();
-      console.log("Sent typing indicator");
-
-      console.log(`Processing query with Claude: "${query}"`);
-      // Process query with Claude
-      const { success, response, isBug } = await processWithClaude(query);
-      console.log(
-        `Claude processing complete. Success: ${success}, Is bug: ${isBug}`,
-      );
-
-      if (success) {
-        // Determine appropriate topic based on query
-        const topic = isBug ? "Bugs" : "General Queries";
-        console.log(`Saving response to memory under topic: ${topic}`);
-
-        // Save to memory
-        await saveToMemory(query, response, topic);
-
-        // Send response (handle >2000 characters with multipart messages)
-        console.log("Sending response to user");
-        if (response.length <= 2000) {
-          await message.reply(response);
-        } else {
-          // Split response into parts of 2000 or fewer characters
-          console.log(`Response exceeds 2000 characters (${response.length}), sending in parts`);
-          const parts = [];
-          let remaining = response;
-          
-          while (remaining.length > 0) {
-            // Find a good break point (end of sentence or paragraph) within first 1900 chars
-            // This gives some buffer for "Part X/Y: " prefix
-            let breakPoint = 1900;
-            if (remaining.length > 1900) {
-              // Try to find paragraph break
-              const paraBreak = remaining.lastIndexOf('\n\n', 1900);
-              if (paraBreak > 1500) {
-                breakPoint = paraBreak + 2; // Include the paragraph break
-              } else {
-                // Try to find sentence break (period followed by space)
-                const sentenceBreak = remaining.lastIndexOf('. ', 1900);
-                if (sentenceBreak > 1500) {
-                  breakPoint = sentenceBreak + 2; // Include the period and space
-                }
-              }
-            } else {
-              breakPoint = remaining.length;
-            }
-            
-            parts.push(remaining.substring(0, breakPoint));
-            remaining = remaining.substring(breakPoint).trim();
-          }
-          
-          console.log(`Split response into ${parts.length} parts`);
-          
-          // Send each part
-          for (let i = 0; i < parts.length; i++) {
-            const partHeader = `Part ${i+1}/${parts.length}: `;
-            await message.reply(partHeader + parts[i]);
-          }
-        }
-      } else {
-        console.log("Claude processing failed, sending error message");
-        await message.reply(
-          "Sorry, I encountered an error while processing your request.",
-        );
-      }
-    } catch (err) {
-      console.error("Error in message handler:", err);
-      try {
-        const errorMsg = "I encountered an unexpected error. Please try again later.";
-        await message.reply(errorMsg);
-      } catch (replyErr) {
-        console.error("Failed to send error message:", replyErr);
-      }
+      const errorMsg = "I encountered an unexpected error. Please try again later.";
+      await message.reply(errorMsg);
+    } catch (replyErr) {
+      console.error("Failed to send error message:", replyErr);
     }
   }
-});
+})
 
 // Main function
 async function main() {
