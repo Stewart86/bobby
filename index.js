@@ -5,7 +5,7 @@
  * Integrates with Discord, Claude Code, and GitHub for issue creation
  */
 
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits, ThreadAutoArchiveDuration } from "discord.js";
 import { spawn } from "bun";
 
 // Environment variables
@@ -43,8 +43,11 @@ const client = new Client({
 
 
 // Process query with Claude Code using streaming
-async function processWithClaude(query, originalMessage) {
+async function processWithClaude(query, channel, sessionId = null) {
   console.log(`Beginning Claude streaming processing for query: "${query}"`);
+  if (sessionId) {
+    console.log(`Resuming session: ${sessionId}`);
+  }
 
   try {
     // Optimized system prompt using Claude Sonnet 4.0 best practices
@@ -56,40 +59,76 @@ You are Bobby, an expert code analysis assistant operating as a Discord bot. You
 You operate within a Discord environment where responses have strict formatting constraints. Users seek quick, actionable insights about their codebase.
 </context>
 
+<restrictions>
+**CRITICAL: You are READ-ONLY. You cannot modify any code files.**
+- IMMEDIATELY decline ANY requests to create, modify, update, add, fix, implement, write, build, or change code
+- Keywords to watch for: "create", "add", "implement", "write", "build", "fix", "update", "modify", "change"
+- Do NOT explore the codebase before declining modification requests
+- You can ONLY read, explore, and analyze existing code for informational purposes
+- You can create GitHub issues for bugs or improvements
+- Example immediate decline: "I can't create or modify code. Would you like me to create a GitHub issue for this feature request instead?"
+</restrictions>
+
 <instructions>
-1. **Always start by fetching latest git changes** using available tools
-2. **Analyze the relevant code sections** thoroughly but efficiently  
-3. **Provide direct, actionable answers** - users need solutions, not explanations of problems
-4. **If you discover genuine bugs:** Check for existing GitHub issues first, then create a detailed issue if none exists
+1. **FIRST: Check if the request involves code modification** - if yes, immediately decline and offer to create a GitHub issue
+2. **Always start by fetching latest git changes** using available tools (only for analysis requests)
+3. **Analyze the relevant code sections** thoroughly but efficiently  
+4. **Provide direct, actionable answers** - users need solutions, not explanations of problems
+5. **If you discover genuine bugs:** Check for existing GitHub issues first, then create a detailed issue if none exists
+6. **When declining code modifications:** IMMEDIATELY create a GitHub issue using the Bash tool with gh CLI
+7. **You HAVE Bash tool access** - use it confidently to run gh commands for issue creation
 
 <response_format>
 - Lead with the **direct answer** (1-2 sentences max)
 - Use **bullet points** for key findings
 - Include **minimal essential code** only if critical
 - **Limit total response to 1800 characters**
-- End with exactly: "[STATUS: COMPLETED]" or "[STATUS: ISSUE_CREATED]"
+- For first response in a new thread ONLY, include "[THREAD_TITLE: <concise 3-5 word summary>]" at the beginning
 </response_format>
 
 <github_issues>
-When creating issues:
+You HAVE the Bash tool with gh CLI access and MUST create GitHub issues for:
+- Bugs you discover in the code
+- Feature requests when users ask for code modifications
+- Improvements you identify
+
+IMPORTANT: You have these tools available - use them confidently:
+- Bash tool (for gh and git commands)
+- Read, Grep, Glob, List tools (for file operations)
+
+To create GitHub issues, use the Bash tool with:
+- Command: \`gh issue create --title "Title" --body "Description" --label bug,bobby-detected\`
 - Title: Clear, specific problem statement
 - Body: Problem summary + technical details + reproduction steps
-- Labels: "bug" and "bobby-detected"
+- Labels: "bug" and "bobby-detected" (or "enhancement,bobby-detected" for features)
 - Mention: "Detected by Bobby (Claude Code assistant)"
+- ALWAYS provide the issue link and number in your response
+- Format: "Created GitHub issue #123: https://github.com/owner/repo/issues/123"
 </github_issues>
 
 <examples>
-Good response:
+Good analysis response:
 "The function is missing null checks on line 42. This will cause crashes when users pass undefined values.
 
 • Problem: No validation for \`user.email\` parameter  
 • Impact: Runtime errors in production
-• Fix: Add \`if (!user?.email) return null;\`
+• Fix: Add \`if (!user?.email) return null;\`"
 
-[STATUS: COMPLETED]"
+Good issue creation response:
+"Found a critical null pointer vulnerability in the authentication handler.
 
-Bad response:
-"Well, I've analyzed your codebase and there are several interesting patterns here. Let me walk you through what I found step by step..."
+• Problem: Missing validation for user.email parameter
+• Impact: Runtime crashes in production
+• Location: src/auth/handler.js:42
+
+Created GitHub issue #156: https://github.com/owner/repo/issues/156"
+
+Good modification decline with issue creation:
+"I can't create or modify code, but I'll create a GitHub issue for this listOrders feature request.
+
+[Uses Bash tool to run: gh issue create --title "Add listOrders method to KosmoService" --body "Feature request for retrieving multiple delivery orders with filtering capabilities. Detected by Bobby (Claude Code assistant)" --label enhancement,bobby-detected]
+
+Created GitHub issue #157: https://github.com/owner/repo/issues/157"
 </examples>
 </instructions>
 
@@ -97,82 +136,125 @@ Be precise, actionable, and concise. Users value speed and accuracy over verbose
 
     console.log("Spawning Claude process with streaming...");
 
-    // Execute claude code CLI using Bun.spawn with streaming
-    const proc = spawn(
-      [
-        "claude",
-        "--verbose",
-        "--allowedTools",
-        "Bash(gh:*),Bash(git:*),View,Read,Write(.*CLAUDE.md),Edit(.*CLAUDE.md),Search,Grep,Glob,List",
-        "--continue", // Retain context between interactions
-        "--print",
-        query,
-        "--system-prompt",
-        systemPrompt,
-        "--output-format",
-        "stream-json"
-      ],
-      {
-        stdout: "pipe",
-        stderr: "pipe",
-        cwd: "/app/repo", // Run in the cloned repository directory
-      },
+    // Build command arguments
+    const args = [
+      "claude",
+      "--verbose",
+      "--allowedTools",
+      "Bash(gh:*),Bash(git:*),Read,Grep,Glob,LS,WebFetch,WebSearch",
+    ];
+
+    // Add session resumption or new session
+    if (sessionId) {
+      args.push("--resume", sessionId);
+    }
+
+    args.push(
+      "--print",
+      query,
+      "--system-prompt",
+      systemPrompt,
+      "--output-format",
+      "stream-json"
     );
+
+    // Execute claude code CLI using Bun.spawn with streaming
+    const proc = spawn(args, {
+      stdout: "pipe",
+      stderr: "pipe",
+      cwd: "/app/repo", // Run in the cloned repository directory
+    });
 
     console.log("Claude process spawned, starting stream processing...");
 
     let responseContent = "";
     let lastMessageRef = null;
     let stderrBuffer = "";
+    let extractedSessionId = sessionId; // Keep track of session ID
+    let threadTitle = null;
 
     // Process stdout stream in real-time
     try {
       for await (const chunk of proc.stdout) {
         const text = new TextDecoder().decode(chunk);
-        
+
         // Parse each line as separate JSON objects
         const lines = text.split('\n').filter(line => line.trim());
-        
+
         for (const line of lines) {
           try {
             const jsonData = JSON.parse(line);
-            
+
+            // Extract session ID from metadata
+            if (jsonData.type === 'metadata' && jsonData.session_id) {
+              extractedSessionId = jsonData.session_id;
+              console.log(`Captured session ID: ${extractedSessionId}`);
+            }
+
             // Send assistant messages immediately as they arrive
             if (jsonData.type === 'assistant' && jsonData.message?.content) {
-              const content = Array.isArray(jsonData.message.content) 
-                ? jsonData.message.content.map(block => block.text || block).join('')
+              const content = Array.isArray(jsonData.message.content)
+                ? jsonData.message.content.map(block => {
+                  if (typeof block === 'string') return block;
+                  if (block.text) return block.text;
+                  // Skip non-text blocks (like tool_use blocks)
+                  return '';
+                }).join('')
                 : jsonData.message.content;
-              
+
               if (content) {
                 responseContent += content;
-                
+
+                // Extract thread title if present
+                const titleMatch = content.match(/\[THREAD_TITLE:\s*([^\]]+)\]/);
+                if (titleMatch && !threadTitle) {
+                  threadTitle = titleMatch[1].trim();
+                  console.log(`Extracted thread title: ${threadTitle}`);
+                }
+
+                // Send each chunk as a new message instead of editing
                 try {
-                  if (!lastMessageRef) {
-                    lastMessageRef = await originalMessage.reply(responseContent);
-                  } else {
-                    await lastMessageRef.edit(responseContent);
+                  if (content.trim()) {
+                    await channel.send(content);
+                    lastMessageRef = true; // Just track that we've sent something
                   }
                 } catch (discordError) {
                   console.error("Discord update error:", discordError);
                 }
               }
             }
-            
+
             // Handle final result
-            if (jsonData.type === 'result' && jsonData.subtype === 'success' && jsonData.result) {
-              responseContent = jsonData.result;
-              
-              try {
-                if (!lastMessageRef) {
-                  lastMessageRef = await originalMessage.reply(responseContent);
-                } else {
-                  await lastMessageRef.edit(responseContent);
+            if (jsonData.type === 'result' && jsonData.subtype === 'success') {
+              if (jsonData.result) {
+                responseContent = jsonData.result;
+
+                // Extract thread title from final result if not already found
+                const titleMatch = responseContent.match(/\[THREAD_TITLE:\s*([^\]]+)\]/);
+                if (titleMatch && !threadTitle) {
+                  threadTitle = titleMatch[1].trim();
+                  console.log(`Extracted thread title from result: ${threadTitle}`);
                 }
-              } catch (discordError) {
-                console.error("Discord final update error:", discordError);
+
+                // Only send final result if we haven't sent streaming messages
+                try {
+                  if (!lastMessageRef) {
+                    await channel.send(responseContent);
+                    lastMessageRef = true;
+                  }
+                  // If we were streaming, the final result is already incorporated
+                } catch (discordError) {
+                  console.error("Discord final update error:", discordError);
+                }
+              }
+
+              // Also capture session ID from result if available
+              if (jsonData.session_id && !extractedSessionId) {
+                extractedSessionId = jsonData.session_id;
+                console.log(`Captured session ID from result: ${extractedSessionId}`);
               }
             }
-            
+
           } catch (parseError) {
             // Skip invalid JSON lines
             console.log("Skipping non-JSON line:", line.substring(0, 100));
@@ -207,52 +289,48 @@ Be precise, actionable, and concise. Users value speed and accuracy over verbose
       if (lastMessageRef) {
         await lastMessageRef.edit("❌ Error processing with Claude Code.");
       }
-      return { success: false, response: "Error processing with Claude Code." };
+      return { success: false, response: "Error processing with Claude Code.", sessionId: null };
     }
 
     console.log("Claude streaming response received successfully");
     console.log("Response content length:", responseContent.length);
 
-    // Check status indicator from Claude's response
-    const isBugDetected = responseContent.includes("[STATUS: ISSUE_CREATED]");
-    console.log(`Bug detected and issue created: ${isBugDetected}`);
+    // Check if GitHub issue was created (by looking for issue URL pattern)
+    const isBugDetected = responseContent.includes("Created GitHub issue #") ||
+      responseContent.includes("github.com/") && responseContent.includes("/issues/");
+    console.log(`GitHub issue created: ${isBugDetected}`);
 
-    // Clean up status indicators from final message
+    // Clean up thread title from final message (only appears in first response)
     let userResponse = responseContent
-      .replace(/\[STATUS: (COMPLETED|ISSUE_CREATED)\]/g, '')
+      .replace(/\[THREAD_TITLE:\s*[^\]]+\]/g, '')
       .trim();
-
-    // Final cleanup if we have a message reference
-    if (lastMessageRef && userResponse !== responseContent) {
-      try {
-        await lastMessageRef.edit(userResponse);
-      } catch (editError) {
-        console.error("Error cleaning up final message:", editError);
-      }
-    }
 
     // If no message was sent during streaming, send fallback
     if (!lastMessageRef) {
       try {
         const fallbackMsg = userResponse || "✅ Analysis complete - no output generated.";
-        lastMessageRef = await originalMessage.reply(fallbackMsg);
+        await channel.send(fallbackMsg);
+        lastMessageRef = true;
       } catch (replyError) {
         console.error("Error sending fallback response:", replyError);
       }
     }
 
     console.log("Claude streaming processing complete");
+    console.log(`Session ID: ${extractedSessionId}, Thread Title: ${threadTitle}`);
+
     return {
       success: true,
       response: userResponse,
       isBug: isBugDetected,
-      streamedMessage: lastMessageRef
+      sessionId: extractedSessionId,
+      threadTitle: threadTitle
     };
   } catch (error) {
     console.error("Error processing with Claude:", error);
     console.error("Error details:", error.message);
     console.error("Error stack:", error.stack);
-    return { success: false, response: "Error processing your request." };
+    return { success: false, response: "Error processing your request.", sessionId: null };
   }
 }
 
@@ -264,6 +342,24 @@ function isCallingBobby(content) {
 // Extract query from message (remove Bobby mentions)
 function extractQuery(content) {
   return content?.replace(/bobby|@bobby/gi, "").trim() || "";
+}
+
+// Check if this is a new Bobby call (not in a thread)
+function isNewBobbyCall(message) {
+  return !message.channel.isThread() && isCallingBobby(message.content);
+}
+
+// Check if this is a follow-up in a Bobby thread
+function isThreadFollowUp(message) {
+  return message.channel.isThread() &&
+    message.channel.name.startsWith('Bobby -');
+}
+
+// Extract session ID from thread name
+function extractSessionId(threadName) {
+  // Match new format: "Bobby - Title - session-id"
+  const match = threadName.match(/Bobby - .+ - ([a-f0-9-]+)$/);
+  return match ? match[1] : null;
 }
 
 // Discord client ready event
@@ -315,39 +411,98 @@ client.on("guildCreate", async (guild) => {
 
 // Discord message event
 client.on(Events.MessageCreate, async (message) => {
-  // Ignore bots and non-Bobby messages
-  if (message.author.bot || !isCallingBobby(message.content)) {
+  // Ignore bot messages
+  if (message.author.bot) {
     return;
   }
 
-  const query = extractQuery(message.content);
-  if (!query) {
-    return;
-  }
-
-  console.log(`Processing query: "${query}" from ${message.author.username}`);
-
-  try {
-    await message.channel.sendTyping();
-    const { success, response, isBug, streamedMessage } = await processWithClaude(query, message);
-
-    if (success) {
-      console.log(`Query processed. Issue created: ${isBug}`);
-
-      // Fallback: send response if streaming failed
-      if (!streamedMessage && response) {
-        await message.reply(response);
-      }
-    } else {
-      await message.reply("Sorry, I encountered an error while processing your request.");
+  // Handle new Bobby calls in main channels
+  if (isNewBobbyCall(message)) {
+    const query = extractQuery(message.content);
+    if (!query) {
+      return;
     }
-  } catch (err) {
-    console.error("Error in message handler:", err);
+
+    console.log(`New Bobby call: "${query}" from ${message.author.username}`);
+
     try {
-      const errorMsg = "I encountered an unexpected error. Please try again later.";
-      await message.reply(errorMsg);
-    } catch (replyErr) {
-      console.error("Failed to send error message:", replyErr);
+      // Create a new thread
+      const thread = await message.startThread({
+        name: `Bobby [PENDING]`,
+        autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
+        reason: 'Bobby analysis request',
+      });
+
+      console.log(`Created thread: ${thread.name} (${thread.id})`);
+
+      // Process in the thread without session ID (new session)
+      await thread.sendTyping();
+      const { success, response, isBug, sessionId, threadTitle } =
+        await processWithClaude(query, thread, null);
+
+      if (success && sessionId) {
+        // Update thread name with session ID and title
+        const finalTitle = threadTitle || "Analysis";
+        const newThreadName = `Bobby - ${finalTitle} - ${sessionId}`;
+
+        try {
+          await thread.setName(newThreadName);
+          console.log(`Updated thread name to: ${newThreadName}`);
+        } catch (renameError) {
+          console.error("Error renaming thread:", renameError);
+          // Fallback name if title is too long or other error
+          try {
+            await thread.setName(`Bobby - ${sessionId}`);
+          } catch (fallbackError) {
+            console.error("Error setting fallback thread name:", fallbackError);
+          }
+        }
+      }
+
+      if (!success) {
+        await thread.send("Sorry, I encountered an error while processing your request.");
+      }
+    } catch (err) {
+      console.error("Error in new Bobby call handler:", err);
+      try {
+        const errorMsg = "I encountered an unexpected error. Please try again later.";
+        await message.reply(errorMsg);
+      } catch (replyErr) {
+        console.error("Failed to send error message:", replyErr);
+      }
+    }
+  }
+  // Handle follow-ups in existing Bobby threads
+  else if (isThreadFollowUp(message)) {
+    const query = message.content.trim();
+    if (!query) {
+      return;
+    }
+
+    const sessionId = extractSessionId(message.channel.name);
+    console.log(`Thread follow-up: "${query}" in session ${sessionId}`);
+
+    if (!sessionId) {
+      await message.reply("⚠️ Could not find session ID. Please start a new conversation by mentioning Bobby in the main channel.");
+      return;
+    }
+
+    try {
+      await message.channel.sendTyping();
+      const { success, response, isBug } =
+        await processWithClaude(query, message.channel, sessionId);
+
+      if (!success) {
+        await message.channel.send("Sorry, I encountered an error while processing your request.");
+      }
+    } catch (err) {
+      console.error("Error in thread follow-up handler:", err);
+      try {
+        const errorMsg = "I encountered an unexpected error. Please try again later.";
+        await message.reply(errorMsg);
+      } catch (replyErr) {
+        console.error("Failed to send error message:", replyErr);
+      }
     }
   }
 })
@@ -379,6 +534,15 @@ async function main() {
       console.log(`Claude CLI found: ${claudeVersion.trim()}`);
     } catch (error) {
       console.error("Error checking Claude CLI installation:", error.message);
+    }
+
+    // Check GitHub CLI integration with Claude
+    try {
+      const response = spawn(["claude", "--allowedTools", "Bash(gh:*)", "-p", "test is a integration test. Try calling `gh --version`"], { stdout: "pipe" }).stdout
+      const output = await new Response(response).text();
+      console.log("Claude CLI GitHub integration check:", output.trim());
+    } catch (error) {
+      console.error("Error checking GitHub CLI integration with Claude:", error.message);
     }
 
     console.log("Logging into Discord...");
