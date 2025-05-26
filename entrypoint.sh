@@ -39,11 +39,6 @@ else
   cd /app
 fi
 
-# Create a symlink to the repo in home directory for Claude to access
-ln -sf /app/repo ~/repo
-
-# Ensure needed directories exist
-mkdir -p /app/docs
 mkdir -p /app/data
 
 echo "Bobby initialization complete!"
