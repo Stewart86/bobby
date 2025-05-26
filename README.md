@@ -15,7 +15,7 @@ docker run -d \
   -e GH_TOKEN=your_github_personal_access_token \
   -e GITHUB_REPO=owner/repo-name \
   -v bobby-data:/app/data \
-  stewart86/bobby-bot:latest
+  stewart86/bobby:latest
 ```
 
 That's it! Bobby will automatically:
@@ -253,7 +253,7 @@ docker run -d \
   -e GITHUB_REPO=owner/repo-name \
   -e ALLOWED_DISCORD_SERVERS=123456789012345678,987654321098765432 \
   -v bobby-data:/app/data \
-  stewart86/bobby-bot:latest
+  stewart86/bobby:latest
 ```
 
 **Option 2: Build from Source**
@@ -389,7 +389,7 @@ docker run -d \
   --name "bobby-${ORG_NAME}" \
   --env-file "$1" \
   -v "bobby-${ORG_NAME}-data:/app/data" \
-  stewart86/bobby-bot:latest
+  stewart86/bobby:latest
 ```
 
 This allows each organization to use their own:
@@ -401,9 +401,9 @@ This allows each organization to use their own:
 
 Bobby is automatically published to Docker Hub with every release:
 
-- **Repository**: [`stewart86/bobby-bot`](https://hub.docker.com/r/stewart86/bobby-bot)
-- **Latest stable**: `stewart86/bobby-bot:latest`
-- **Specific versions**: `stewart86/bobby-bot:v1.0.0`
+- **Repository**: [`stewart86/bobby`](https://hub.docker.com/r/stewart86/bobby)
+- **Latest stable**: `stewart86/bobby:latest`
+- **Specific versions**: `stewart86/bobby:v1.0.0`
 
 ### Automated Publishing
 
