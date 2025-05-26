@@ -1,52 +1,26 @@
-# Bobby Discord Bot Dockerfile
+FROM ghcr.io/cli/cli:latest AS gh-cli
+FROM alpine/git:latest AS git-alpine
 FROM oven/bun:latest
 
 WORKDIR /app
 
-# Install dependencies: GitHub CLI, curl, gnupg, git, python, build tools
-RUN apt-get update && \
-    apt-get install -y curl gnupg git python3 python3-pip build-essential && \
-    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
-    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y gh && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    ln -s /usr/bin/python3 /usr/bin/python
+# Copy GitHub CLI and git from official images
+COPY --from=gh-cli /usr/local/bin/gh /usr/local/bin/gh
+COPY --from=git-alpine /usr/bin/git /usr/local/bin/git
 
-# Install Claude Code CLI
 RUN bun install -g @anthropic-ai/claude-code
-
 RUN git config --global pull.rebase true
 
-# Copy all application files
 COPY . .
 
-# Install dependencies
+ENV NODE_ENV=production
 RUN bun install --production
 
-# Set environment variables
-ENV NODE_ENV=production
-
-# Ensure entrypoint script is executable
 RUN chmod +x /app/entrypoint.sh
 
-# Create persistent data directory
 RUN mkdir -p /app/data
-
-# Volume for persistent storage
 VOLUME ["/app/data"]
-
-# Set Claude config directory
 ENV CLAUDE_CONFIG_DIR=/app/data
 
-# Required environment variables:
-# - DISCORD_TOKEN: Discord bot token
-# - ANTHROPIC_API_KEY: Claude API key
-# - GH_TOKEN: GitHub personal access token with repo and issue scopes
-# - GITHUB_REPO: GitHub repository in format "owner/repo-name"
-
-# Use entrypoint script for full setup
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["bun", "run", "index.js"]
