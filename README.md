@@ -26,6 +26,8 @@ That's it! Bobby will automatically:
 
 **Privacy & Security**: You create your own Discord bot and run Bobby in your own isolated Docker container. Your code, conversations, and API keys never leave your environment.
 
+> ⚠️ **Note**: If you encounter Claude authentication issues, see the [Troubleshooting](#troubleshooting) section for a known workaround.
+
 ## Features
 
 - **AI-Powered Responses**: Uses Claude Code to answer questions about your codebase
@@ -444,6 +446,35 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines, code
 ## Memory Management
 
 Bobby stores information in Markdown files in the `docs/` directory, organized by topic. The `CLAUDE.md` file serves as an index to these memory files, helping Claude find relevant information during conversations.
+
+## Troubleshooting
+
+### Claude API Authentication Issues
+
+If you encounter authentication errors with Claude, this is a known issue tracked in the [Claude Code repository](https://github.com/anthropics/claude-code/issues).
+
+**Error symptoms:**
+- Bobby fails to start with Claude authentication errors
+- API key authentication failures in container logs
+
+**Workaround:**
+1. Access the running Docker container:
+   ```bash
+   docker exec -it bobby /bin/sh
+   ```
+
+2. Manually authenticate Claude Code CLI:
+   ```bash
+   claude
+   # Follow the interactive prompts to authenticate
+   ```
+
+3. Exit the container - Bobby should now work properly:
+   ```bash
+   exit
+   ```
+
+This issue typically resolves itself once Claude Code CLI is manually authenticated within the container environment.
 
 ## License
 
