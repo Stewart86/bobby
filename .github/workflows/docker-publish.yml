@@ -60,3 +60,5 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./README.md
+          short-description: "AI-powered Discord bot for codebase analysis and bug detection"
+        continue-on-error: true
