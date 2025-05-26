@@ -128,29 +128,9 @@ To keep your bot private and prevent unauthorized access:
 
 1. **Disable Public Bot Setting**: In the Discord Developer Portal under the "Bot" tab, make sure "Public Bot" is disabled. This prevents anyone with your client ID from adding the bot to their server.
 
-2. **Implement Server Whitelist**: Add code to check server IDs and leave any unauthorized servers.
+2. **Server Whitelist**: Bobby automatically implements server whitelisting when you provide the `ALLOWED_DISCORD_SERVERS` environment variable with comma-separated server IDs.
 
-```javascript
-// Add to index.js
-client.on("guildCreate", async (guild) => {
-  // List of allowed server IDs
-  const allowedServers = [
-    // Add your authorized server IDs here
-    "123456789012345678",
-    "987654321098765432",
-  ];
-
-  // Check if the server is authorized
-  if (!allowedServers.includes(guild.id)) {
-    console.log(`Leaving unauthorized server: ${guild.name} (${guild.id})`);
-    await guild.leave();
-  } else {
-    console.log(`Joined authorized server: ${guild.name} (${guild.id})`);
-  }
-});
-```
-
-3. **Control Invite Links**: Only share bot invite links with trusted users and regularly rotate your bot token if you suspect unauthorized access.
+3. **Use Environment Variables**: Bobby automatically handles server whitelisting via the `ALLOWED_DISCORD_SERVERS` environment variable.
 
 4. **Use Minimal Permissions**: Only request the permissions your bot actually needs to function.
 
@@ -176,15 +156,7 @@ client.on("guildCreate", async (guild) => {
    - Copy and securely store the generated API key immediately (this is your `ANTHROPIC_API_KEY`)
    - **IMPORTANT**: This key will not be shown again and grants access to paid API usage
 
-4. Install Claude Code CLI:
-   - After obtaining your API key, set it as an environment variable:
-     ```bash
-     export ANTHROPIC_API_KEY=your_api_key_here
-     ```
-   - Use Bun to install Claude Code CLI:
-     ```bash
-     bun install -g @anthropic-ai/claude-code
-     ```
+**Note**: When using Docker (recommended), the Claude Code CLI is automatically installed and configured. Manual installation is only needed for local development.
 
 ## GitHub Personal Access Token Setup
 
@@ -212,34 +184,16 @@ GH_TOKEN=your_github_personal_access_token
 GITHUB_REPO=owner/repo-name
 ```
 
-### Local Development
+### Local Development (Optional)
 
-1. Install dependencies:
+**Note**: Docker deployment is recommended. Local development requires additional setup:
 
-   ```bash
-   bun install
-   ```
+1. Install dependencies: `bun install`
+2. Install Claude Code CLI: `bun install -g @anthropic-ai/claude-code`
+3. Install and authenticate GitHub CLI
+4. Start development server: `bun run dev`
 
-2. Install Claude Code CLI:
-
-   ```bash
-   bun install -g @anthropic-ai/claude-code
-   ```
-
-3. Install GitHub CLI and authenticate:
-
-   ```bash
-   # Install GitHub CLI (follow instructions for your OS)
-   # https://github.com/cli/cli#installation
-
-   # Authenticate with your token
-   echo $GH_TOKEN | gh auth login --with-token
-   ```
-
-4. Start the development server:
-   ```bash
-   bun run dev
-   ```
+For detailed local setup, see the Docker option above which handles all dependencies automatically.
 
 ### Docker Deployment
 
@@ -297,108 +251,26 @@ The container will automatically authenticate with GitHub using your GH_TOKEN be
 3. Bobby will respond with an answer based on your codebase
 4. If Bobby detects a bug, it will automatically create a GitHub issue
 
-## Public Bot Deployment
+## Multi-Instance Deployment
 
-If you're offering Bobby as a service to multiple users or organizations, consider these options for secure configuration management:
-
-### 1. Self-Hosted Web Portal
-
-Create a simple secure web interface where users can:
-
-- Enter their own API keys and tokens
-- Select GitHub repositories they want to monitor
-- Configure Discord servers to connect to
-
-Store configurations securely:
-
-- Use encrypted database storage with proper authentication
-- Implement a multi-tenant architecture with separate instances
-- Never expose API keys in logs or client-side code
-
-### 2. Configuration File Wizard
-
-Create a secure configuration wizard script:
-
-```javascript
-// config-wizard.js
-import { prompt } from "bun:prompt";
-import { write, file } from "bun";
-import { randomBytes, createCipheriv } from "crypto";
-
-async function configWizard() {
-  console.log("Bobby Bot Configuration Wizard");
-
-  // Get encryption password
-  const password = await prompt(
-    "Enter a secure password to encrypt your configuration:",
-    { password: true },
-  );
-
-  // Collect credentials
-  const config = {
-    DISCORD_TOKEN: await prompt("Enter your Discord Bot Token:"),
-    ANTHROPIC_API_KEY: await prompt("Enter your Anthropic API Key:"),
-    GH_TOKEN: await prompt("Enter your GitHub Personal Access Token:"),
-    GITHUB_REPO: await prompt(
-      "Enter your GitHub Repository (owner/repo-name):",
-    ),
-  };
-
-  // Encrypt and save configuration
-  const iv = randomBytes(16);
-  const cipher = createCipheriv(
-    "aes-256-cbc",
-    password.substr(0, 32).padEnd(32, "0"),
-    iv,
-  );
-  let encrypted = cipher.update(JSON.stringify(config), "utf8", "hex");
-  encrypted += cipher.final("hex");
-
-  await write(
-    "bobby-config.enc",
-    JSON.stringify({
-      iv: iv.toString("hex"),
-      data: encrypted,
-    }),
-  );
-
-  console.log("Configuration saved to bobby-config.enc");
-  console.log(
-    "To start Bobby, run: bun run --env-file-path bobby-config.enc index.js",
-  );
-}
-
-configWizard();
-```
-
-### 3. Multi-Container Deployment
-
-For running multiple instances, create a deployment script:
+To run Bobby for multiple repositories or organizations, use separate containers:
 
 ```bash
-#!/bin/bash
-# deploy-bobby.sh
+# Deploy for different repositories
+docker run -d --name bobby-repo1 \
+  -e GITHUB_REPO=org/repo1 \
+  [other env vars] \
+  -v bobby-repo1-data:/app/data \
+  stewart86/bobby:latest
 
-if [ -z "$1" ]; then
-  echo "Usage: ./deploy-bobby.sh <config-file.env>"
-  exit 1
-fi
-
-# Extract organization name from config filename
-ORG_NAME=$(basename "$1" .env)
-
-# Run container with organization-specific config and volumes
-docker run -d \
-  --name "bobby-${ORG_NAME}" \
-  --env-file "$1" \
-  -v "bobby-${ORG_NAME}-data:/app/data" \
+docker run -d --name bobby-repo2 \
+  -e GITHUB_REPO=org/repo2 \
+  [other env vars] \
+  -v bobby-repo2-data:/app/data \
   stewart86/bobby:latest
 ```
 
-This allows each organization to use their own:
-
-- API keys and tokens
-- Data storage and session management
+Each instance maintains separate data storage and session management.
 
 ## Docker Hub
 
@@ -422,15 +294,16 @@ GitHub Actions automatically builds and publishes Docker images:
 ```
 bobby/
 ├── index.js           # Main application file
-├── docs/              # Memory storage directory
-├── data/              # Data storage directory
-├── CLAUDE.md          # Memory index for Claude
-├── package.json       # Dependency management
+├── CLAUDE.md          # Claude Code instructions and memory index
+├── package.json       # Dependencies and scripts
 ├── entrypoint.sh      # Docker container initialization script
-├── deploy-bobby.sh    # Multi-instance deployment script
-├── config-wizard.js   # Configuration setup wizard
 ├── Dockerfile         # Docker configuration
 ├── CONTRIBUTING.md    # Contribution guidelines
+├── LICENSE            # MIT license
+├── .env.example       # Environment variables template
+├── .github/           # GitHub Actions workflows
+│   └── workflows/
+│       └── docker-publish.yml
 └── README.md          # Documentation
 ```
 
@@ -447,7 +320,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines, code
 
 ## Memory Management
 
-Bobby stores information in Markdown files in the `docs/` directory, organized by topic. The `CLAUDE.md` file serves as an index to these memory files, helping Claude find relevant information during conversations.
+Bobby uses the `CLAUDE.md` file for storing project instructions and context that helps Claude understand the codebase and provide better responses during conversations.
 
 ## Troubleshooting
 
