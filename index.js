@@ -216,17 +216,20 @@ Be precise, actionable, and concise. Users value speed and accuracy over verbose
               if (content) {
                 responseContent += content;
 
-                // Extract thread title if present
+                // Extract thread title if present (but don't show to user)
                 const titleMatch = content.match(/\[THREAD_TITLE:\s*([^\]]+)\]/);
                 if (titleMatch && !threadTitle) {
                   threadTitle = titleMatch[1].trim();
                   console.log(`Extracted thread title: ${threadTitle}`);
                 }
 
+                // Remove thread title from content before sending to user
+                const userContent = content.replace(/\[THREAD_TITLE:\s*[^\]]+\]/g, '').trim();
+
                 // Send each chunk as a new message instead of editing
                 try {
-                  if (content.trim()) {
-                    await channel.send(content);
+                  if (userContent) {
+                    await channel.send(userContent);
                     lastMessageRef = true; // Just track that we've sent something
                   }
                 } catch (discordError) {
@@ -250,8 +253,12 @@ Be precise, actionable, and concise. Users value speed and accuracy over verbose
                 // Only send final result if we haven't sent streaming messages
                 try {
                   if (!lastMessageRef) {
-                    await channel.send(responseContent);
-                    lastMessageRef = true;
+                    // Remove thread title from final response before sending to user
+                    const userResponse = responseContent.replace(/\[THREAD_TITLE:\s*[^\]]+\]/g, '').trim();
+                    if (userResponse) {
+                      await channel.send(userResponse);
+                      lastMessageRef = true;
+                    }
                   }
                   // If we were streaming, the final result is already incorporated
                 } catch (discordError) {
