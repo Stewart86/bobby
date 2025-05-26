@@ -346,8 +346,8 @@ Be precise, actionable, and concise. Users value speed and accuracy over verbose
 }
 
 // Check if message is calling Bobby
-function isCallingBobby(content) {
-  return content?.toLowerCase().includes("bobby");
+function isCallingBobby(message) {
+  return message.mentions.users.has(message.client.user.id);
 }
 
 // Extract query from message (remove Bobby mentions)
@@ -357,7 +357,7 @@ function extractQuery(content) {
 
 // Check if this is a new Bobby call (not in a thread)
 function isNewBobbyCall(message) {
-  return !message.channel.isThread() && isCallingBobby(message.content);
+  return !message.channel.isThread() && isCallingBobby(message);
 }
 
 // Check if this is a follow-up in a Bobby thread
