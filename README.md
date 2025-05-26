@@ -4,13 +4,10 @@ Bobby is a Discord chatbot that helps answer questions about your codebase, file
 
 ## Quick Start with Docker
 
-Get Bobby running in under 2 minutes:
+Get Bobby running in under 1 minute:
 
 ```bash
-# 1. Build the Docker image
-docker build -t bobby-bot .
-
-# 2. Run Bobby with your credentials
+# Run Bobby with your credentials (pre-built image from Docker Hub)
 docker run -d \
   --name bobby \
   -e DISCORD_TOKEN=your_discord_bot_token \
@@ -18,7 +15,7 @@ docker run -d \
   -e GH_TOKEN=your_github_personal_access_token \
   -e GITHUB_REPO=owner/repo-name \
   -v bobby-data:/app/data \
-  bobby-bot
+  stewart86/bobby-bot:latest
 ```
 
 That's it! Bobby will automatically:
@@ -243,26 +240,45 @@ GITHUB_REPO=owner/repo-name
 
 ### Docker Deployment
 
-1. Build the Docker image:
+**Option 1: Pre-built Image (Recommended)**
 
-   ```bash
-   docker build -t bobby-bot .
-   ```
+Use the official pre-built image from Docker Hub:
 
-2. Run the container:
+```bash
+docker run -d \
+  --name bobby \
+  -e DISCORD_TOKEN=your_discord_bot_token \
+  -e ANTHROPIC_API_KEY=your_anthropic_api_key \
+  -e GH_TOKEN=your_github_personal_access_token \
+  -e GITHUB_REPO=owner/repo-name \
+  -e ALLOWED_DISCORD_SERVERS=123456789012345678,987654321098765432 \
+  -v bobby-data:/app/data \
+  stewart86/bobby-bot:latest
+```
 
-   ```bash
-   docker run -d \
-     --name bobby \
-     -e DISCORD_TOKEN=your_discord_bot_token \
-     -e ANTHROPIC_API_KEY=your_anthropic_api_key \
-     -e GH_TOKEN=your_github_personal_access_token \
-     -e GITHUB_REPO=owner/repo-name \
-     -e ALLOWED_DISCORD_SERVERS=123456789012345678,987654321098765432 \
-     -v bobby-docs:/app/docs \
-     -v bobby-data:/app/data \
-     bobby-bot
-   ```
+**Option 2: Build from Source**
+
+If you want to build from source or make modifications:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/Stewart86/bobby.git
+cd bobby
+
+# 2. Build the Docker image
+docker build -t bobby-bot .
+
+# 3. Run the container
+docker run -d \
+  --name bobby \
+  -e DISCORD_TOKEN=your_discord_bot_token \
+  -e ANTHROPIC_API_KEY=your_anthropic_api_key \
+  -e GH_TOKEN=your_github_personal_access_token \
+  -e GITHUB_REPO=owner/repo-name \
+  -e ALLOWED_DISCORD_SERVERS=123456789012345678,987654321098765432 \
+  -v bobby-data:/app/data \
+  bobby-bot
+```
 
    The container will automatically authenticate with GitHub using your GH_TOKEN before starting the bot.
 
@@ -372,16 +388,30 @@ ORG_NAME=$(basename "$1" .env)
 docker run -d \
   --name "bobby-${ORG_NAME}" \
   --env-file "$1" \
-  -v "bobby-${ORG_NAME}-docs:/app/docs" \
-  -v "bobby-${ORG_NAME}-db:/app/bobby.sqlite" \
-  bobby-bot
+  -v "bobby-${ORG_NAME}-data:/app/data" \
+  stewart86/bobby-bot:latest
 ```
 
 This allows each organization to use their own:
 
 - API keys and tokens
-- Memory storage (docs/)
-- Rate limiting database
+- Data storage and session management
+
+## Docker Hub
+
+Bobby is automatically published to Docker Hub with every release:
+
+- **Repository**: [`stewart86/bobby-bot`](https://hub.docker.com/r/stewart86/bobby-bot)
+- **Latest stable**: `stewart86/bobby-bot:latest`
+- **Specific versions**: `stewart86/bobby-bot:v1.0.0`
+
+### Automated Publishing
+
+GitHub Actions automatically builds and publishes Docker images:
+- ✅ **On every commit to main**: Updates `latest` tag
+- ✅ **On version tags**: Creates versioned releases (e.g., `v1.0.0`)
+- ✅ **Multi-platform support**: Built for `linux/amd64`
+- ✅ **Description sync**: README automatically synced to Docker Hub
 
 ## Project Structure
 
