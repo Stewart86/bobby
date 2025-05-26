@@ -290,9 +290,9 @@ The container will automatically authenticate with GitHub using your GH_TOKEN be
 ## Usage
 
 1. Invite the bot to your Discord server
-2. Mention "Bobby" in your message followed by your question
+2. Mention Bobby (@Bobby) in your message followed by your question
    ```
-   Hey Bobby, what's the authentication flow in our app?
+   @Bobby what's the authentication flow in our app?
    ```
 3. Bobby will respond with an answer based on your codebase
 4. If Bobby detects a bug, it will automatically create a GitHub issue
