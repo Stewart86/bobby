@@ -2,21 +2,72 @@
 
 Bobby is a Discord chatbot that helps answer questions about your codebase, file bugs, and translate business requirements into technical requirements. Bobby leverages Claude Code to understand your codebase and provide intelligent responses.
 
+## Quick Start with Docker
+
+Get Bobby running in under 2 minutes:
+
+```bash
+# 1. Build the Docker image
+docker build -t bobby-bot .
+
+# 2. Run Bobby with your credentials
+docker run -d \
+  --name bobby \
+  -e DISCORD_TOKEN=your_discord_bot_token \
+  -e ANTHROPIC_API_KEY=your_anthropic_api_key \
+  -e GH_TOKEN=your_github_personal_access_token \
+  -e GITHUB_REPO=owner/repo-name \
+  -v bobby-data:/app/data \
+  bobby-bot
+```
+
+That's it! Bobby will automatically:
+- Install and configure Claude Code CLI
+- Authenticate with GitHub
+- Clone your repository
+- Start monitoring Discord for mentions
+
+**Privacy & Security**: You create your own Discord bot and run Bobby in your own isolated Docker container. Your code, conversations, and API keys never leave your environment.
+
 ## Features
 
 - **AI-Powered Responses**: Uses Claude Code to answer questions about your codebase
 - **Bug Detection**: Automatically creates GitHub issues when bugs are detected
-- **Memory Management**: Stores responses in a searchable, topic-organized format
-- **Rate Limiting**: Prevents abuse with SQLite-based rate limiting
-- **Easy Deployment**: Docker support for simple deployment
+- **Thread-Based Sessions**: Each conversation maintains context in Discord threads
+- **Read-Only Design**: Analyzes code without making changes
+- **Privacy-First**: Your own Discord bot and isolated Docker container
+- **Easy Deployment**: Complete Docker support with automated setup
+
+## How It Works
+
+Bobby uses Discord threads for session management:
+
+1. **Start a conversation**: Mention Bobby in any channel to create a new thread
+2. **Continue chatting**: Type in the thread (no need to mention Bobby again)
+3. **Each thread maintains context**: Bobby remembers your conversation history
+4. **Auto-organization**: Threads are named based on your questions
+
+Bobby can:
+- ✅ Analyze and explore your codebase
+- ✅ Answer questions about code functionality
+- ✅ Detect bugs and create GitHub issues
+- ✅ Provide code recommendations
+- ❌ Cannot modify or write code files (read-only by design)
+
+**Why Self-Host Bobby?**
+- 🔒 **Complete Privacy**: Your code never leaves your infrastructure
+- 🏠 **Your Own Bot**: Create and control your own Discord bot
+- 🐳 **Isolated Environment**: Runs in your own Docker container
+- 🔑 **Your API Keys**: Direct relationship with Anthropic and GitHub
+- 🛡️ **Zero Trust**: No third-party services handling your sensitive data
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) runtime for local development
 - [Discord Bot Token](https://discord.com/developers/applications) (see setup instructions below)
 - [Anthropic API Key](https://anthropic.com) for Claude (see setup instructions below)
 - [GitHub Personal Access Token](https://github.com/settings/tokens) with repo and issue scopes
 - GitHub repository name in the format `owner/repo-name`
+- [Bun](https://bun.sh/) runtime (for local development only)
 
 ## Discord Bot Setup
 
@@ -339,27 +390,31 @@ bobby/
 ├── index.js           # Main application file
 ├── docs/              # Memory storage directory
 ├── data/              # Data storage directory
-│   └── bobby.sqlite   # Rate limiting database
 ├── CLAUDE.md          # Memory index for Claude
 ├── package.json       # Dependency management
 ├── entrypoint.sh      # Docker container initialization script
 ├── deploy-bobby.sh    # Multi-instance deployment script
 ├── config-wizard.js   # Configuration setup wizard
 ├── Dockerfile         # Docker configuration
+├── CONTRIBUTING.md    # Contribution guidelines
 └── README.md          # Documentation
 ```
 
+## Contributing
+
+Bobby is built with modern JavaScript and Bun runtime. Key components:
+
+- **Discord.js**: Handles Discord bot interactions and thread management
+- **Claude Code CLI**: Powers AI analysis of codebases
+- **GitHub CLI**: Creates issues automatically when bugs are detected
+- **Bun**: Fast JavaScript runtime for better performance
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines, code architecture, and how to contribute to the project.
+
 ## Memory Management
 
-Bobby stores information in Markdown files in the `docs/` directory, organized by topic. The `CLAUDE.md` file serves as an index to these memory files, helping Claude find relevant information.
-
-## Rate Limiting
-
-Bobby implements rate limiting to prevent abuse:
-
-- 20 requests per user per hour
-- Limits are stored in SQLite database
+Bobby stores information in Markdown files in the `docs/` directory, organized by topic. The `CLAUDE.md` file serves as an index to these memory files, helping Claude find relevant information during conversations.
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details.
