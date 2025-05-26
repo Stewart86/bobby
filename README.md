@@ -19,6 +19,7 @@ docker run -d \
 ```
 
 That's it! Bobby will automatically:
+
 - Install and configure Claude Code CLI
 - Authenticate with GitHub
 - Clone your repository
@@ -45,6 +46,7 @@ Bobby uses Discord threads for session management:
 4. **Auto-organization**: Threads are named based on your questions
 
 Bobby can:
+
 - ✅ Analyze and explore your codebase
 - ✅ Answer questions about code functionality
 - ✅ Detect bugs and create GitHub issues
@@ -52,6 +54,7 @@ Bobby can:
 - ❌ Cannot modify or write code files (read-only by design)
 
 **Why Self-Host Bobby?**
+
 - 🔒 **Complete Privacy**: Your code never leaves your infrastructure
 - 🏠 **Your Own Bot**: Create and control your own Discord bot
 - 🐳 **Isolated Environment**: Runs in your own Docker container
@@ -280,9 +283,9 @@ docker run -d \
   bobby-bot
 ```
 
-   The container will automatically authenticate with GitHub using your GH_TOKEN before starting the bot.
+The container will automatically authenticate with GitHub using your GH_TOKEN before starting the bot.
 
-   **Security Note**: The `ALLOWED_DISCORD_SERVERS` environment variable controls which Discord servers can use your bot. If not specified, all servers will be allowed (not recommended for production).
+**Security Note**: The `ALLOWED_DISCORD_SERVERS` environment variable controls which Discord servers can use your bot. If not specified, all servers will be allowed (not recommended for production).
 
 ## Usage
 
@@ -408,6 +411,7 @@ Bobby is automatically published to Docker Hub with every release:
 ### Automated Publishing
 
 GitHub Actions automatically builds and publishes Docker images:
+
 - ✅ **On every commit to main**: Updates `latest` tag
 - ✅ **On version tags**: Creates versioned releases (e.g., `v1.0.0`)
 - ✅ **Multi-platform support**: Built for `linux/amd64`
@@ -444,6 +448,39 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines, code
 ## Memory Management
 
 Bobby stores information in Markdown files in the `docs/` directory, organized by topic. The `CLAUDE.md` file serves as an index to these memory files, helping Claude find relevant information during conversations.
+
+## Troubleshooting
+
+### Claude API Authentication Issues
+
+If you encounter authentication errors with Claude, this is a known issue tracked in the [Claude Code repository](https://github.com/anthropics/claude-code/issues).
+
+**Error symptoms:**
+
+- Bobby fails to start with Claude authentication errors
+- API key authentication failures in container logs
+
+**Workaround:**
+
+1. Access the running Docker container:
+
+   ```bash
+   docker exec -it bobby /bin/sh
+   ```
+
+2. Manually authenticate Claude Code CLI:
+
+   ```bash
+   claude
+   # Follow the interactive prompts to authenticate
+   ```
+
+3. Exit the container - Bobby should now work properly:
+   ```bash
+   exit
+   ```
+
+This issue typically resolves itself once Claude Code CLI is manually authenticated within the container environment.
 
 ## License
 
