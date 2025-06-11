@@ -7,10 +7,49 @@
 
 import { Client, Events, GatewayIntentBits, ThreadAutoArchiveDuration } from "discord.js";
 import { spawn } from "bun";
+import { join } from "path";
 
 // Environment variables
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GITHUB_REPO = process.env.GITHUB_REPO;
+
+// Session storage configuration
+const DATA_DIR = process.env.CLAUDE_CONFIG_DIR || "/app/data";
+const SESSIONS_FILE = join(DATA_DIR, "thread-sessions.json");
+
+// Session storage utilities using Bun file methods
+async function loadSessions() {
+  try {
+    const file = Bun.file(SESSIONS_FILE);
+    if (await file.exists()) {
+      return await file.json();
+    }
+    return {};
+  } catch (error) {
+    console.error("Error loading sessions:", error);
+    return {};
+  }
+}
+
+async function saveSessions(sessions) {
+  try {
+    await Bun.write(SESSIONS_FILE, JSON.stringify(sessions, null, 2));
+  } catch (error) {
+    console.error("Error saving sessions:", error);
+  }
+}
+
+async function storeThreadSession(threadId, sessionId, title) {
+  const sessions = await loadSessions();
+  sessions[threadId] = { sessionId, title, createdAt: new Date().toISOString() };
+  await saveSessions(sessions);
+  console.log(`Stored session: ${threadId} -> ${sessionId} (${title})`);
+}
+
+async function getThreadSession(threadId) {
+  const sessions = await loadSessions();
+  return sessions[threadId] || null;
+}
 
 if (!DISCORD_TOKEN) {
   console.error("Error: DISCORD_TOKEN environment variable is not set");
@@ -422,14 +461,7 @@ function isNewBobbyCall(message) {
 // Check if this is a follow-up in a Bobby thread
 function isThreadFollowUp(message) {
   return message.channel.isThread() &&
-    message.channel.name.startsWith('Bobby -');
-}
-
-// Extract session ID from thread name
-function extractSessionId(threadName) {
-  // Match new format: "Bobby - Title - session-id"
-  const match = threadName.match(/Bobby - .+ - ([a-f0-9-]+)$/);
-  return match ? match[1] : null;
+    message.channel.name.startsWith('Bobby');
 }
 
 // Discord client ready event
@@ -496,9 +528,9 @@ client.on(Events.MessageCreate, async (message) => {
     console.log(`New Bobby call: "${query}" from ${message.author.username}`);
 
     try {
-      // Create a new thread
+      // Create a new thread with simple naming
       const thread = await message.startThread({
-        name: `Bobby [PENDING]`,
+        name: `Bobby Analysis`,
         autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
         reason: 'Bobby analysis request',
       });
@@ -511,21 +543,17 @@ client.on(Events.MessageCreate, async (message) => {
         await processWithClaude(query, thread, null);
 
       if (success && sessionId) {
-        // Update thread name with session ID and title
+        // Store session data in JSON file instead of thread name
         const finalTitle = threadTitle || "Analysis";
-        const newThreadName = `Bobby - ${finalTitle} - ${sessionId}`;
+        await storeThreadSession(thread.id, sessionId, finalTitle);
 
+        // Update thread name with a clean title
         try {
-          await thread.setName(newThreadName);
-          console.log(`Updated thread name to: ${newThreadName}`);
+          await thread.setName(`Bobby - ${finalTitle}`);
+          console.log(`Updated thread name to: Bobby - ${finalTitle}`);
         } catch (renameError) {
           console.error("Error renaming thread:", renameError);
-          // Fallback name if title is too long or other error
-          try {
-            await thread.setName(`Bobby - ${sessionId}`);
-          } catch (fallbackError) {
-            console.error("Error setting fallback thread name:", fallbackError);
-          }
+          // Keep default name if renaming fails
         }
       }
 
@@ -549,18 +577,20 @@ client.on(Events.MessageCreate, async (message) => {
       return;
     }
 
-    const sessionId = extractSessionId(message.channel.name);
-    console.log(`Thread follow-up: "${query}" in session ${sessionId}`);
+    const sessionData = await getThreadSession(message.channel.id);
+    console.log(`Thread follow-up: "${query}" in thread ${message.channel.id}`);
 
-    if (!sessionId) {
-      await message.reply("⚠️ Could not find session ID. Please start a new conversation by mentioning Bobby in the main channel.");
+    if (!sessionData || !sessionData.sessionId) {
+      await message.reply("⚠️ Could not find session data. Please start a new conversation by mentioning Bobby in the main channel.");
       return;
     }
+
+    console.log(`Using session ID: ${sessionData.sessionId} (${sessionData.title})`);
 
     try {
       await message.channel.sendTyping();
       const { success, response, isBug } =
-        await processWithClaude(query, message.channel, sessionId);
+        await processWithClaude(query, message.channel, sessionData.sessionId);
 
       if (!success) {
         await message.channel.send("Sorry, I encountered an error while processing your request.");
