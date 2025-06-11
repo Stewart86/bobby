@@ -32,13 +32,25 @@ if (!process.env.GH_TOKEN) {
   process.exit(1);
 }
 
-// Initialize Discord client
+// Self-healing configuration
+const RECONNECT_DELAY = 5000; // 5 seconds
+const MAX_RECONNECT_ATTEMPTS = 10;
+let reconnectAttempts = 0;
+let isReconnecting = false;
+
+// Initialize Discord client with error handling
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
+  // Add WebSocket options for better error handling
+  ws: {
+    properties: {
+      browser: 'Discord.js'
+    }
+  }
 });
 
 
@@ -183,101 +195,141 @@ Be precise, actionable, and concise. Users value speed and accuracy over verbose
     let stderrBuffer = "";
     let extractedSessionId = sessionId; // Keep track of session ID
     let threadTitle = null;
+    let jsonBuffer = ""; // Buffer to accumulate partial JSON
 
     // Process stdout stream in real-time
     try {
       for await (const chunk of proc.stdout) {
         const text = new TextDecoder().decode(chunk);
+        jsonBuffer += text;
 
-        // Parse each line as separate JSON objects
-        const lines = text.split('\n').filter(line => line.trim());
+        // Try to extract complete JSON objects from buffer
+        let startIndex = 0;
+        let braceCount = 0;
+        let inString = false;
+        let escapeNext = false;
 
-        for (const line of lines) {
-          try {
-            const jsonData = JSON.parse(line);
-
-            // Extract session ID from metadata
-            if (jsonData.type === 'metadata' && jsonData.session_id) {
-              extractedSessionId = jsonData.session_id;
-              console.log(`Captured session ID: ${extractedSessionId}`);
-            }
-
-            // Send assistant messages immediately as they arrive
-            if (jsonData.type === 'assistant' && jsonData.message?.content) {
-              const content = Array.isArray(jsonData.message.content)
-                ? jsonData.message.content.map(block => {
-                  if (typeof block === 'string') return block;
-                  if (block.text) return block.text;
-                  // Skip non-text blocks (like tool_use blocks)
-                  return '';
-                }).join('')
-                : jsonData.message.content;
-
-              if (content) {
-                responseContent += content;
-
-                // Extract thread title if present (but don't show to user)
-                const titleMatch = content.match(/\[THREAD_TITLE:\s*([^\]]+)\]/);
-                if (titleMatch && !threadTitle) {
-                  threadTitle = titleMatch[1].trim();
-                  console.log(`Extracted thread title: ${threadTitle}`);
-                }
-
-                // Remove thread title from content before sending to user
-                const userContent = content.replace(/\[THREAD_TITLE:\s*[^\]]+\]/g, '').trim();
-
-                // Send each chunk as a new message instead of editing
+        for (let i = 0; i < jsonBuffer.length; i++) {
+          const char = jsonBuffer[i];
+          
+          if (escapeNext) {
+            escapeNext = false;
+            continue;
+          }
+          
+          if (char === '\\' && inString) {
+            escapeNext = true;
+            continue;
+          }
+          
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+          
+          if (!inString) {
+            if (char === '{') {
+              braceCount++;
+            } else if (char === '}') {
+              braceCount--;
+              
+              // Complete JSON object found
+              if (braceCount === 0) {
+                const jsonStr = jsonBuffer.substring(startIndex, i + 1);
                 try {
-                  if (userContent) {
-                    await channel.send(userContent);
-                    lastMessageRef = true; // Just track that we've sent something
+                  const jsonData = JSON.parse(jsonStr);
+
+                  // Extract session ID from metadata
+                  if (jsonData.type === 'metadata' && jsonData.session_id) {
+                    extractedSessionId = jsonData.session_id;
+                    console.log(`Captured session ID: ${extractedSessionId}`);
                   }
-                } catch (discordError) {
-                  console.error("Discord update error:", discordError);
-                }
-              }
-            }
 
-            // Handle final result
-            if (jsonData.type === 'result' && jsonData.subtype === 'success') {
-              if (jsonData.result) {
-                responseContent = jsonData.result;
+                  // Send assistant messages immediately as they arrive
+                  if (jsonData.type === 'assistant' && jsonData.message?.content) {
+                    const content = Array.isArray(jsonData.message.content)
+                      ? jsonData.message.content.map(block => {
+                        if (typeof block === 'string') return block;
+                        if (block.text) return block.text;
+                        // Skip non-text blocks (like tool_use blocks)
+                        return '';
+                      }).join('')
+                      : jsonData.message.content;
 
-                // Extract thread title from final result if not already found
-                const titleMatch = responseContent.match(/\[THREAD_TITLE:\s*([^\]]+)\]/);
-                if (titleMatch && !threadTitle) {
-                  threadTitle = titleMatch[1].trim();
-                  console.log(`Extracted thread title from result: ${threadTitle}`);
-                }
+                    if (content) {
+                      responseContent += content;
 
-                // Only send final result if we haven't sent streaming messages
-                try {
-                  if (!lastMessageRef) {
-                    // Remove thread title from final response before sending to user
-                    const userResponse = responseContent.replace(/\[THREAD_TITLE:\s*[^\]]+\]/g, '').trim();
-                    if (userResponse) {
-                      await channel.send(userResponse);
-                      lastMessageRef = true;
+                      // Extract thread title if present (but don't show to user)
+                      const titleMatch = content.match(/\[THREAD_TITLE:\s*([^\]]+)\]/);
+                      if (titleMatch && !threadTitle) {
+                        threadTitle = titleMatch[1].trim();
+                        console.log(`Extracted thread title: ${threadTitle}`);
+                      }
+
+                      // Remove thread title from content before sending to user
+                      const userContent = content.replace(/\[THREAD_TITLE:\s*[^\]]+\]/g, '').trim();
+
+                      // Send each chunk as a new message instead of editing
+                      try {
+                        if (userContent) {
+                          await channel.send(userContent);
+                          lastMessageRef = true; // Just track that we've sent something
+                        }
+                      } catch (discordError) {
+                        console.error("Discord update error:", discordError);
+                      }
                     }
                   }
-                  // If we were streaming, the final result is already incorporated
-                } catch (discordError) {
-                  console.error("Discord final update error:", discordError);
-                }
-              }
 
-              // Also capture session ID from result if available
-              if (jsonData.session_id && !extractedSessionId) {
-                extractedSessionId = jsonData.session_id;
-                console.log(`Captured session ID from result: ${extractedSessionId}`);
+                  // Handle final result
+                  if (jsonData.type === 'result' && jsonData.subtype === 'success') {
+                    if (jsonData.result) {
+                      responseContent = jsonData.result;
+
+                      // Extract thread title from final result if not already found
+                      const titleMatch = responseContent.match(/\[THREAD_TITLE:\s*([^\]]+)\]/);
+                      if (titleMatch && !threadTitle) {
+                        threadTitle = titleMatch[1].trim();
+                        console.log(`Extracted thread title from result: ${threadTitle}`);
+                      }
+
+                      // Only send final result if we haven't sent streaming messages
+                      try {
+                        if (!lastMessageRef) {
+                          // Remove thread title from final response before sending to user
+                          const userResponse = responseContent.replace(/\[THREAD_TITLE:\s*[^\]]+\]/g, '').trim();
+                          if (userResponse) {
+                            await channel.send(userResponse);
+                            lastMessageRef = true;
+                          }
+                        }
+                        // If we were streaming, the final result is already incorporated
+                      } catch (discordError) {
+                        console.error("Discord final update error:", discordError);
+                      }
+                    }
+
+                    // Also capture session ID from result if available
+                    if (jsonData.session_id && !extractedSessionId) {
+                      extractedSessionId = jsonData.session_id;
+                      console.log(`Captured session ID from result: ${extractedSessionId}`);
+                    }
+                  }
+
+                } catch (parseError) {
+                  console.log("Failed to parse JSON object:", parseError.message);
+                }
+                
+                // Move to next potential JSON object
+                startIndex = i + 1;
+                braceCount = 0;
               }
             }
-
-          } catch (parseError) {
-            // Skip invalid JSON lines
-            console.log("Skipping non-JSON line:", line.substring(0, 100));
           }
         }
+        
+        // Remove processed JSON objects from buffer
+        jsonBuffer = jsonBuffer.substring(startIndex);
       }
     } catch (streamError) {
       console.error("Error processing stdout stream:", streamError);
