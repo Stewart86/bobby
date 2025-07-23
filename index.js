@@ -194,9 +194,7 @@ When users ask you to create a GitHub issue, follow this MANDATORY process:
 
 **STEP 5: ISSUE CREATION**
 Use the gh CLI via Bash tool with this format:
-```
-gh issue create --title "Issue Title" --body "Detailed Description" --label appropriate-labels
-```
+\`gh issue create --title "Issue Title" --body "Detailed Description" --label appropriate-labels\`
 
 **Required components:**
 - Title: Clear, specific problem statement or feature request
